@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="30">
 <title>AQUA // WATER TRACKER</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
 <style>
@@ -131,6 +130,20 @@ body{animation:flicker 8s infinite}
   border:2px solid #0a0a0a;cursor:pointer;box-shadow:0 0 8px #00ffff88;border-radius:0}
 .unc-bar-readout{text-align:center;font-size:10px;color:#808080;margin-top:4px;letter-spacing:1px}
 .unc-bar-readout span{color:#00ffff;font-weight:700}
+/* Energy mode slider — green → yellow → red */
+.unc-bar.energy .unc-endpoint.lo{color:#00cc44}
+.unc-bar.energy .unc-endpoint.hi{color:#ff3333}
+.unc-bar.energy .unc-slider-bar{background:linear-gradient(90deg,#00cc44,#ffd700 50%,#ff3333)}
+.unc-bar.energy .unc-slider-bar::-webkit-slider-thumb{background:#ffd700;box-shadow:0 0 8px #ffd70088}
+.unc-bar.energy .unc-slider-bar::-moz-range-thumb{background:#ffd700;box-shadow:0 0 8px #ffd70088}
+.unc-bar.energy .unc-bar-readout span{color:#ffd700}
+/* Withdrawn mode slider — teal → magenta */
+.unc-bar.withdrawn .unc-endpoint.lo{color:#660066}
+.unc-bar.withdrawn .unc-endpoint.hi{color:#ff00ff}
+.unc-bar.withdrawn .unc-slider-bar{background:linear-gradient(90deg,#660066,#cc00cc 50%,#ff00ff)}
+.unc-bar.withdrawn .unc-slider-bar::-webkit-slider-thumb{background:#ff00ff;box-shadow:0 0 8px #ff00ff88}
+.unc-bar.withdrawn .unc-slider-bar::-moz-range-thumb{background:#ff00ff;box-shadow:0 0 8px #ff00ff88}
+.unc-bar.withdrawn .unc-bar-readout span{color:#ff00ff}
 
 /* DISTRIBUTION SLIDER (vertical, next to globe) */
 .globe-inner{display:flex;align-items:center;gap:6px}
@@ -241,8 +254,7 @@ body{animation:flicker 8s infinite}
     <div style="text-align:right">
       <div class="gen-time" id="genTime"></div>
       <div class="live-badge">
-        <span class="live-dot"></span> LIVE — auto-refreshes every 30s
-        <button class="refresh-btn" onclick="location.reload()">REFRESH NOW</button>
+        <button class="refresh-btn" onclick="location.reload()">REFRESH</button>
       </div>
     </div>
   </header>
@@ -279,7 +291,7 @@ body{animation:flicker 8s infinite}
         <div class="metric-label">Withdrawn (total intake)</div>
         <div><span class="metric-value magenta" id="withdrawn">0.00</span><span class="metric-unit">mL</span></div>
       </div>
-      <div class="metric-group">
+      <div class="metric-group clickable" id="metricEnergy" onclick="setBenchMode('energy')" style="color:#ffd700">
         <div class="metric-label">Energy</div>
         <div><span class="metric-value gold" id="energy">0.00</span><span class="metric-unit">Wh</span></div>
       </div>
@@ -320,7 +332,7 @@ body{animation:flicker 8s infinite}
       <input type="range" id="uncSlider" class="unc-slider-bar" min="0" max="100" value="100" step="1">
       <span class="unc-endpoint hi" id="uncHigh">--</span>
     </div>
-    <div class="unc-bar-readout"><span id="scenarioLabel">CENTRAL</span> &mdash; <span id="scenarioMl">0.0</span> mL</div>
+    <div class="unc-bar-readout"><span id="scenarioLabel">CENTRAL</span> &mdash; <span id="scenarioMl">0.0</span> <span id="scenarioUnit">mL</span></div>
   </section>
 
   <!-- BENCHMARKS -->
@@ -774,23 +786,34 @@ function drawTimeline(tl) {
 let benchMode = 'consumed';
 let currentConsumedMl = 0;
 let currentWithdrawnMl = 0;
+let currentEnergyWh = 0;
+
+function updateBenchmarks() {
+  if (benchMode === 'energy') {
+    renderEnergyBenchmarks(currentEnergyWh);
+  } else {
+    const ml = benchMode === 'consumed' ? currentConsumedMl : currentWithdrawnMl;
+    renderBenchmarks(computeBenchmarks(ml), ml);
+  }
+}
 
 function setBenchMode(mode) {
   benchMode = mode;
-  // Toggle active class
+  // Toggle active class on all three
   const mc = document.getElementById('metricConsumed');
   const mw = document.getElementById('metricWithdrawn');
+  const me = document.getElementById('metricEnergy');
   if (mc) mc.classList.toggle('active', mode === 'consumed');
   if (mw) mw.classList.toggle('active', mode === 'withdrawn');
+  if (me) me.classList.toggle('active', mode === 'energy');
   // Update label
   const lbl = document.getElementById('benchModeLabel');
   if (lbl) {
     lbl.textContent = mode;
-    lbl.style.color = mode === 'consumed' ? '#00ffff' : '#ff00ff';
+    lbl.style.color = mode === 'consumed' ? '#00ffff' : mode === 'withdrawn' ? '#ff00ff' : '#ffd700';
   }
-  // Re-render benchmarks with the selected value
-  const ml = mode === 'consumed' ? currentConsumedMl : currentWithdrawnMl;
-  renderBenchmarks(computeBenchmarks(ml), ml);
+  updateBenchmarks();
+  updateSliderDisplay();
 }
 
 // =========================================================================
@@ -830,12 +853,12 @@ function render(d) {
 
   currentConsumedMl = d.totals.consumption_ml;
   currentWithdrawnMl = d.totals.withdrawal_ml;
-  const benchMl = benchMode === 'consumed' ? currentConsumedMl : currentWithdrawnMl;
-  renderBenchmarks(computeBenchmarks(benchMl), benchMl);
+  currentEnergyWh = d.totals.energy_wh;
+  updateBenchmarks();
   renderSessions(d.sessions);
   drawTimeline(d.timeline);
   renderTools(d.tools);
-  renderUncertainty(d.scenarios);
+  renderUncertainty(d.scenarios, d.raw_tokens);
   renderTokens(d.raw_tokens);
 }
 
@@ -848,6 +871,15 @@ const IC = {
   cube: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M14 4l10 5v10L14 24 4 19V9z"/><path d="M14 4v20M4 9l10 5 10-5" opacity=".35"/></svg>',
   faucet: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M3 8h11v5H3z"/><line x1="14" y1="8" x2="14" y2="19"/><path d="M14 10h8c1.5 0 2.5 1 2.5 2.5s-1 2.5-2.5 2.5h-8"/><circle cx="14" cy="22" r="1.3" fill="currentColor" opacity=".6"/><circle cx="14" cy="25.5" r="0.8" fill="currentColor" opacity=".3"/></svg>',
   house: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14L14 5l10 9"/><rect x="7" y="14" width="14" height="10"/><rect x="12" y="18" width="4" height="6"/></svg>',
+  // Energy icons
+  phone: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="12" height="24" rx="2"/><line x1="12" y1="22" x2="16" y2="22"/></svg>',
+  bulb: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 22h8M11 25h6"/><path d="M14 2C9 2 5 6 5 10.5c0 3.5 2.5 6 4.5 8 .5.5 1 1.5 1 2.5h7c0-1 .5-2 1-2.5 2-2 4.5-4.5 4.5-8C23 6 19 2 14 2z"/></svg>',
+  magnifier: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><line x1="18" y1="18" x2="25" y2="25"/></svg>',
+  microwave: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="24" height="18" rx="1"/><rect x="4" y="7" width="15" height="14" rx=".5"/><circle cx="22" cy="11" r="1.2"/><circle cx="22" cy="15" r="1.2"/></svg>',
+  laptop: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V7c0-1 1-2 2-2h16c1 0 2 1 2 2v12"/><path d="M1 19h26l-2 4H3z"/></svg>',
+  car: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17l2-6c.5-1.5 1.5-2.5 3-2.5h8c1.5 0 2.5 1 3 2.5l2 6"/><rect x="3" y="17" width="22" height="6" rx="1"/><circle cx="8" cy="23" r="2"/><circle cx="20" cy="23" r="2"/></svg>',
+  battery: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="20" height="12" rx="1"/><path d="M23 12h2v4h-2"/><rect x="5" y="10" width="6" height="8" fill="currentColor" opacity=".2"/></svg>',
+  tv: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="22" height="16" rx="1"/><line x1="10" y1="21" x2="10" y2="25"/><line x1="18" y1="21" x2="18" y2="25"/><line x1="8" y1="25" x2="20" y2="25"/></svg>',
 };
 const COL_MAP = {cyan:'#00ffff',magenta:'#ff00ff',green:'#00ff00',gold:'#ffd700'};
 
@@ -885,6 +917,55 @@ function fmtNum(n) {
   if (n >= 1000) return (n/1000).toFixed(1) + 'K';
   return n.toString();
 }
+function fmtEn(n) {
+  if (n >= 1) return n.toFixed(1);
+  if (n >= 0.01) return n.toFixed(2);
+  return n.toFixed(3);
+}
+function fmtDist(m) {
+  if (m >= 1000) return (m/1000).toFixed(1) + ' km';
+  if (m >= 1) return m.toFixed(0) + ' m';
+  return (m*100).toFixed(0) + ' cm';
+}
+
+function computeEnergyBenchmarks(wh) {
+  if (wh <= 0) return {phone:0,led:0,searches:0,micro:0,laptop:0,ev:0,aa:0,tv:0};
+  return {
+    phone:    wh / 12,                 // ~12 Wh smartphone charge
+    led:      wh / 10,                 // 10W LED bulb → hours
+    searches: Math.round(wh / 0.3),    // ~0.3 Wh per Google search
+    micro:    (wh / 1000) * 3600,      // 1000W microwave → seconds
+    laptop:   (wh / 40) * 60,          // ~40W laptop → minutes
+    ev:       wh / (280 / 1609.34),    // 280 Wh/mi → meters
+    aa:       wh / 1.5,               // ~1.5 Wh per AA battery
+    tv:       (wh / 100) * 60,        // ~100W TV → minutes
+  };
+}
+
+function renderEnergyBenchmarks(wh) {
+  const el = document.getElementById('benchGrid');
+  if (wh <= 0) { el.innerHTML = '<div class="empty" style="grid-column:1/-1">Start a session to see benchmarks</div>'; return; }
+  const eb = computeEnergyBenchmarks(wh);
+  const cards = [
+    { icon: IC.phone, num: fmtEn(eb.phone), label: 'PHONE CHARGES', sub: '~12 Wh per full charge', color: 'gold', pct: Math.min(eb.phone*100, 100) },
+    { icon: IC.bulb, num: fmtEn(eb.led)+'h', label: 'LED BULB-HOURS', sub: '10W LED bulb', color: 'cyan', pct: Math.min(eb.led/8*100, 100) },
+    { icon: IC.magnifier, num: fmtNum(eb.searches), label: 'GOOGLE SEARCHES', sub: '~0.3 Wh each', color: 'magenta', pct: Math.min(eb.searches/1000*100, 100) },
+    { icon: IC.microwave, num: eb.micro.toFixed(1)+'s', label: 'OF MICROWAVE', sub: '1,000W standard', color: 'green', pct: Math.min(eb.micro/60*100, 100) },
+    { icon: IC.laptop, num: eb.laptop.toFixed(1)+'m', label: 'LAPTOP TIME', sub: '~40W avg laptop', color: 'gold', pct: Math.min(eb.laptop/60*100, 100) },
+    { icon: IC.car, num: fmtDist(eb.ev), label: 'IN AN EV', sub: '280 Wh/mile avg', color: 'cyan', pct: Math.min(eb.ev/1609*100, 100) },
+    { icon: IC.battery, num: fmtEn(eb.aa), label: 'AA BATTERIES', sub: '~1.5 Wh each', color: 'magenta', pct: Math.min(eb.aa/10*100, 100) },
+    { icon: IC.tv, num: eb.tv.toFixed(1)+'m', label: 'TV TIME', sub: '~100W flat panel', color: 'green', pct: Math.min(eb.tv/60*100, 100) },
+  ];
+  el.innerHTML = cards.map(c =>
+    '<div class="bench-card" style="color:'+COL_MAP[c.color]+'">' +
+      c.icon +
+      '<div class="num '+c.color+'">'+c.num+'</div>' +
+      '<div class="label">'+c.label+'</div>' +
+      '<div class="sub">'+c.sub+'</div>' +
+      '<div class="bar-bg"><div class="bar-fill" style="width:'+c.pct+'%;background:'+COL_MAP[c.color]+'"></div></div>' +
+    '</div>'
+  ).join('');
+}
 
 function renderSessions(sessions) {
   const el = document.getElementById('sessionsList');
@@ -914,14 +995,56 @@ function renderTools(tools) {
   }).join('');
 }
 
-function renderUncertainty(sc) {
-  if (!sc) return;
+// Scenario ranges for all three modes (computed from raw_tokens)
+let scenarioRanges = {
+  consumed:  { low: 0, high: 0 },
+  withdrawn: { low: 0, high: 0 },
+  energy:    { low: 0, high: 0 },
+};
+
+function computeScenarioRanges(raw) {
+  if (!raw) return;
+  for (const [key, pos] of [['low', 0], ['high', 1]]) {
+    const w = calcWater(raw.input, raw.output, raw.thinking, 'opus', pos);
+    if (raw.agent_turns > 0) {
+      const aw = calcWater(5000 * raw.agent_turns, 1500 * raw.agent_turns, 0, 'opus', pos);
+      w.consumption_ml += aw.consumption_ml;
+      w.withdrawal_ml += aw.withdrawal_ml;
+      w.energy_wh += aw.energy_wh;
+    }
+    scenarioRanges.consumed[key] = w.consumption_ml;
+    scenarioRanges.withdrawn[key] = w.withdrawal_ml;
+    scenarioRanges.energy[key] = w.energy_wh;
+  }
+}
+
+function updateSliderDisplay() {
+  const range = scenarioRanges[benchMode];
+  const unit = benchMode === 'energy' ? 'Wh' : 'mL';
   const low = document.getElementById('uncLow');
   const hi = document.getElementById('uncHigh');
-  if (low) low.textContent = sc.low.toFixed(1) + ' mL';
-  if (hi) hi.textContent = sc.high.toFixed(1) + ' mL';
+  const unitEl = document.getElementById('scenarioUnit');
+  if (low) low.textContent = range.low.toFixed(1) + ' ' + unit;
+  if (hi) hi.textContent = range.high.toFixed(1) + ' ' + unit;
+  if (unitEl) unitEl.textContent = unit;
+  // Update current value readout
+  const val = benchMode === 'energy' ? currentEnergyWh
+            : benchMode === 'withdrawn' ? currentWithdrawnMl
+            : currentConsumedMl;
   const ml = document.getElementById('scenarioMl');
-  if (ml) ml.textContent = sc.central.toFixed(1);
+  if (ml) ml.textContent = val.toFixed(1);
+  // Swap slider color scheme
+  const bar = document.querySelector('.unc-bar');
+  if (bar) {
+    bar.classList.remove('energy', 'withdrawn');
+    if (benchMode === 'energy') bar.classList.add('energy');
+    else if (benchMode === 'withdrawn') bar.classList.add('withdrawn');
+  }
+}
+
+function renderUncertainty(sc, raw) {
+  computeScenarioRanges(raw);
+  updateSliderDisplay();
 }
 
 function renderTokens(raw) {
@@ -1052,11 +1175,11 @@ function onScenarioChange(value) {
   document.getElementById('eventsText').textContent =
     pd.totals.events + ' events across ' + pd.totals.sessions + ' sessions';
 
-  // Store both values and update benchmarks for active mode
+  // Store all values and update benchmarks for active mode
   currentConsumedMl = w.consumption_ml;
   currentWithdrawnMl = w.withdrawal_ml;
-  const benchMl = benchMode === 'consumed' ? w.consumption_ml : w.withdrawal_ml;
-  renderBenchmarks(computeBenchmarks(benchMl), benchMl);
+  currentEnergyWh = w.energy_wh;
+  updateBenchmarks();
 
   // Update tank
   if (tank) tank.setLevel(w.consumption_ml, TANK_MAX);
@@ -1070,10 +1193,10 @@ function onScenarioChange(value) {
   const youEl = document.getElementById('globeYou');
   if (youEl) youEl.textContent = w.consumption_ml.toFixed(3);
 
-  // Scenario label
+  // Scenario label + slider readout (respects benchMode)
   const label = pos < 0.2 ? 'LOW' : pos > 0.8 ? 'HIGH' : pos < 0.4 ? 'LOW-CENTRAL' : pos > 0.6 ? 'CENTRAL-HIGH' : 'CENTRAL';
   document.getElementById('scenarioLabel').textContent = label;
-  document.getElementById('scenarioMl').textContent = w.consumption_ml.toFixed(1);
+  updateSliderDisplay();
 }
 
 // =========================================================================
