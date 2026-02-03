@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="30">
+<title>AQUA // WATER TRACKER</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px}
+body{
+  background:#0a0a0a;color:#e0e0e0;
+  font-family:'JetBrains Mono','SF Mono','Fira Code',Consolas,'Courier New',monospace;
+  line-height:1.5;overflow-x:hidden;
+}
+::selection{background:#00ffff33;color:#00ffff}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#0a0a0a}
+::-webkit-scrollbar-thumb{background:#333}
+
+/* CRT */
+body::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9998;
+  background:repeating-linear-gradient(0deg,transparent 0px,rgba(0,0,0,0.04) 1px,transparent 2px,transparent 3px)}
+body::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9997;
+  background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.35) 100%)}
+@keyframes flicker{0%,96%{opacity:1}97%{opacity:.97}98%{opacity:.99}100%{opacity:1}}
+body{animation:flicker 8s infinite}
+
+.dash{max-width:1060px;margin:0 auto;padding:20px 24px;position:relative;z-index:1}
+
+/* HEADER */
+.header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid #1a3a3a}
+.title{font-family:'Bebas Neue',Impact,sans-serif;font-size:32px;letter-spacing:3px;color:#ffd700}
+.title span{color:#00ffff}
+.subtitle{color:#808080;font-size:11px;letter-spacing:1px;text-transform:uppercase;margin-left:12px}
+.gen-time{color:#666;font-size:10px;letter-spacing:1px}
+.live-badge{display:inline-flex;align-items:center;gap:5px;font-size:9px;letter-spacing:1px;color:#555;margin-top:4px}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#00ff00;box-shadow:0 0 6px #00ff0088;animation:live-pulse 2s ease-in-out infinite}
+@keyframes live-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.refresh-btn{background:none;border:1px solid #333;color:#808080;font-family:inherit;font-size:9px;
+  padding:2px 8px;cursor:pointer;letter-spacing:1px;margin-left:6px}
+.refresh-btn:hover{border-color:#00ffff;color:#00ffff}
+
+/* HERO — 3 column */
+.hero{display:grid;grid-template-columns:220px 1fr 380px;gap:20px;margin-bottom:24px;min-height:400px}
+.tank-wrap{position:relative}
+#tankCanvas{display:block;width:220px;height:400px;border:1px solid #1a3a3a;background:#0a0a0a}
+.metrics{display:flex;flex-direction:column;justify-content:center;gap:14px}
+.metric-group{display:flex;flex-direction:column;gap:2px}
+.metric-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#ffd700}
+.metric-value{font-size:36px;font-weight:700;color:#00ffff;line-height:1;
+  text-shadow:0 0 15px rgba(0,255,255,0.5),0 0 40px rgba(0,255,255,0.15)}
+.metric-value.magenta{color:#ff00ff;text-shadow:0 0 15px rgba(255,0,255,0.5)}
+.metric-value.gold{color:#ffd700;font-size:24px;text-shadow:0 0 10px rgba(255,215,0,0.4)}
+.metric-unit{color:#808080;font-size:13px;margin-left:4px;font-weight:300}
+.metric-group.clickable{cursor:pointer;padding:6px 10px;margin:-6px -10px;border-left:3px solid transparent;transition:border-color 0.2s,background 0.2s}
+.metric-group.clickable:hover{background:rgba(255,255,255,0.02)}
+.metric-group.clickable.active{border-left-color:currentColor}
+.metric-group.clickable.active .metric-label::after{content:' ◂';font-size:8px}
+.nearest-box{margin-top:4px;padding:8px 14px;border:1px solid #1a3a3a;background:#141414;font-size:12px}
+.nearest-box .lbl{color:#ffd700;font-size:10px;letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:2px}
+.events-badge{font-size:11px;color:#808080;letter-spacing:1px;text-transform:uppercase}
+
+/* GLOBE COLUMN */
+.globe-col{display:flex;flex-direction:column;align-items:center;gap:8px}
+#globeCanvas{display:block;width:280px;height:280px;border:1px solid #1a3a3a;background:#060a08}
+.globe-stats{text-align:center;width:100%}
+.globe-label{font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#555;cursor:help}
+.globe-counter{font-size:22px;font-weight:700;color:#00ffff;text-shadow:0 0 10px rgba(0,255,255,0.3);font-variant-numeric:tabular-nums}
+.globe-unit{font-size:9px;color:#555;letter-spacing:1px;font-weight:300}
+.globe-rate{font-size:8px;color:#444;letter-spacing:1px;margin-top:1px}
+.globe-you{font-size:9px;color:#ffd700;margin-top:3px;opacity:0.85}
+.globe-pct{font-size:7px;color:#444;letter-spacing:1px;margin-top:1px}
+
+/* BENCHMARKS */
+.bench-section{margin-bottom:24px}
+.bench-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.bench-card{background:#141414;border:1px solid #1a3a3a;padding:16px 12px;text-align:center;position:relative;overflow:hidden}
+.bench-card .num{font-size:28px;font-weight:700;line-height:1.1;margin-bottom:4px}
+.bench-card .num.cyan{color:#00ffff;text-shadow:0 0 12px rgba(0,255,255,0.4)}
+.bench-card .num.magenta{color:#ff00ff;text-shadow:0 0 12px rgba(255,0,255,0.4)}
+.bench-card .num.green{color:#00ff00;text-shadow:0 0 12px rgba(0,255,0,0.4)}
+.bench-card .num.gold{color:#ffd700;text-shadow:0 0 12px rgba(255,215,0,0.4)}
+.bench-card .label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#808080}
+.bench-card .sub{font-size:9px;color:#666;margin-top:6px}
+.bench-card .bar-bg{position:absolute;bottom:0;left:0;right:0;height:3px;background:#1a1a1a}
+.bench-card .bar-fill{height:100%;transition:width 1s ease}
+
+/* PANELS */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.panel{background:#141414;border:1px solid #1a3a3a;padding:16px 20px}
+.panel-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#808080;margin-bottom:12px}
+.panel-title::before{content:'[ ';color:#333}
+.panel-title::after{content:' ]';color:#333}
+
+/* Sessions */
+.session-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.session-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.session-dot.active{background:#00ff00;box-shadow:0 0 6px #00ff0088}
+.session-dot.ended{background:#666}
+.session-dir{color:#e0e0e0;width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-events{color:#808080;width:60px;text-align:right}
+.session-ml{color:#00ffff;width:70px;text-align:right}
+.session-time{color:#666;margin-left:auto;font-size:10px}
+
+/* Timeline */
+#timelineCanvas{display:block;width:100%;height:180px}
+
+/* Tools */
+.tool-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px}
+.tool-name{color:#e0e0e0;width:80px;text-align:right}
+.tool-bar-bg{flex:1;height:14px;background:#1a1a1a;position:relative;overflow:hidden}
+.tool-bar{height:100%;transition:width 0.5s ease}
+.tool-count{color:#808080;width:30px;text-align:right;font-size:10px}
+.tool-ml{color:#00ffff;width:55px;text-align:right;font-size:10px}
+
+/* (Old uncertainty panel styles removed — replaced by .unc-bar) */
+
+/* COMPACT UNCERTAINTY BAR (below hero) */
+.unc-bar{margin-bottom:20px;padding:10px 20px;background:#141414;border:1px solid #1a3a3a}
+.unc-bar-inner{display:flex;align-items:center;gap:10px}
+.unc-endpoint{font-size:10px;letter-spacing:1px;white-space:nowrap;min-width:60px}
+.unc-endpoint.lo{color:#006666;text-align:right}
+.unc-endpoint.hi{color:#ff00ff;text-align:left}
+.unc-slider-bar{-webkit-appearance:none;flex:1;height:3px;outline:none;
+  background:linear-gradient(90deg,#006666,#00ffff 50%,#ff00ff)}
+.unc-slider-bar::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#00ffff;
+  border:2px solid #0a0a0a;cursor:pointer;box-shadow:0 0 8px #00ffff88;border-radius:0}
+.unc-slider-bar::-moz-range-thumb{width:14px;height:14px;background:#00ffff;
+  border:2px solid #0a0a0a;cursor:pointer;box-shadow:0 0 8px #00ffff88;border-radius:0}
+.unc-bar-readout{text-align:center;font-size:10px;color:#808080;margin-top:4px;letter-spacing:1px}
+.unc-bar-readout span{color:#00ffff;font-weight:700}
+
+/* DISTRIBUTION SLIDER (vertical, next to globe) */
+.globe-inner{display:flex;align-items:center;gap:6px}
+.dist-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;width:32px;flex-shrink:0}
+.dist-lbl{font-size:6px;letter-spacing:1.5px;text-transform:uppercase;color:#555;writing-mode:horizontal-tb}
+.dist-lbl.top{color:#ff00ff}
+.dist-lbl.bot{color:#006666}
+.dist-track{position:relative;width:32px;height:240px}
+.dist-track input[type="range"]{position:absolute;width:240px;height:3px;
+  left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);
+  -webkit-appearance:none;outline:none;
+  background:linear-gradient(90deg,#006666,#808080 50%,#ff00ff)}
+.dist-track input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  background:#ffd700;border:2px solid #0a0a0a;cursor:pointer;box-shadow:0 0 8px #ffd70088;border-radius:0}
+.dist-track input[type="range"]::-moz-range-thumb{width:14px;height:14px;
+  background:#ffd700;border:2px solid #0a0a0a;cursor:pointer;box-shadow:0 0 8px #ffd70088;border-radius:0}
+.dist-readout{font-size:8px;color:#ffd700;letter-spacing:1px;text-align:center;margin-top:2px}
+
+/* History */
+.history-wrap{margin-bottom:20px;padding:16px 20px;background:#141414;border:1px solid #1a3a3a}
+.history-bars{display:flex;align-items:flex-end;gap:8px;height:80px;margin-top:8px}
+.history-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.history-bar{width:100%;min-height:2px;background:#00ffff;box-shadow:0 0 6px #00ffff44;transition:height 0.5s ease}
+.history-label{font-size:9px;color:#666}
+.history-ml{font-size:9px;color:#00ffff}
+
+/* Citations */
+.citations{margin-bottom:16px;padding:12px 20px;border:1px solid #1a3a3a;background:#0c0c0c;font-size:9px;color:#555;letter-spacing:0.5px;line-height:1.7}
+.citations .cite-title{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#444;margin-bottom:4px}
+.citations a{color:#006666;text-decoration:none;border-bottom:1px dotted #333}
+.citations a:hover{color:#00ffff}
+
+/* Footer */
+.footer{padding-top:12px;border-top:1px solid #1a3a3a;font-size:10px;color:#666;text-align:center;letter-spacing:1px}
+.dim{color:#808080}
+.empty{color:#333;font-size:12px;text-align:center;padding:20px 0}
+
+/* MASCOT & ICONS */
+.mascot{display:inline-block;vertical-align:middle;margin-left:8px;animation:mascot-bob 3s ease-in-out infinite}
+@keyframes mascot-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.bench-card .icon{display:block;margin:0 auto 6px;opacity:0.7}
+.bench-card:hover .icon{opacity:1;filter:drop-shadow(0 0 4px currentColor)}
+
+/* FLOATING DROPS */
+.float-drops{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden}
+.fdrop{position:absolute;opacity:0;animation:fdrop-fall linear infinite}
+@keyframes fdrop-fall{
+  0%{transform:translateY(-20px) rotate(0);opacity:0}
+  10%{opacity:0.12}
+  90%{opacity:0.08}
+  100%{transform:translateY(calc(100vh + 20px)) rotate(20deg);opacity:0}
+}
+
+/* CLOUD */
+.cloud-decor{position:absolute;top:-10px;left:50%;transform:translateX(-50%);opacity:0.08;pointer-events:none}
+
+/* BEAKER LABEL */
+.tank-label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#333;text-align:center;margin-top:4px}
+
+@media(max-width:800px){
+  .hero{grid-template-columns:1fr;gap:16px}
+  .grid,.bench-grid{grid-template-columns:1fr 1fr}
+  .metric-value{font-size:28px}
+  .mascot{display:none}
+  .globe-col{order:-1}
+  #globeCanvas{width:220px;height:220px}
+  .dist-track{height:180px}
+  .dist-track input[type="range"]{width:180px}
+}
+</style>
+</head>
+<body>
+<!-- Floating ambient drops -->
+<div class="float-drops" aria-hidden="true">
+  <svg class="fdrop" style="left:8%;width:12px;animation-duration:9s;animation-delay:0s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#00ffff" opacity=".5"/></svg>
+  <svg class="fdrop" style="left:23%;width:8px;animation-duration:12s;animation-delay:2s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#00ffff" opacity=".4"/></svg>
+  <svg class="fdrop" style="left:45%;width:10px;animation-duration:10s;animation-delay:4s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#ff00ff" opacity=".3"/></svg>
+  <svg class="fdrop" style="left:67%;width:14px;animation-duration:11s;animation-delay:1s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#00ffff" opacity=".4"/></svg>
+  <svg class="fdrop" style="left:82%;width:9px;animation-duration:13s;animation-delay:5s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#00ffff" opacity=".35"/></svg>
+  <svg class="fdrop" style="left:36%;width:7px;animation-duration:14s;animation-delay:7s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#ffd700" opacity=".25"/></svg>
+  <svg class="fdrop" style="left:55%;width:11px;animation-duration:10s;animation-delay:3s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#00ffff" opacity=".3"/></svg>
+  <svg class="fdrop" style="left:92%;width:8px;animation-duration:15s;animation-delay:6s" viewBox="0 0 12 16"><path d="M6 1C6 1 1 7 1 10c0 3 2 5 5 5s5-2 5-5C11 7 6 1 6 1z" fill="#ff00ff" opacity=".2"/></svg>
+</div>
+
+<div class="dash">
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="title">AQUA <span>//</span> WATER TRACKER</div>
+      <svg class="mascot" viewBox="0 0 36 44" width="36" height="44">
+        <path d="M18 3C18 3 5 18 5 27c0 7 6 13 13 13s13-6 13-13C31 18 18 3 18 3z" fill="#00ffff" opacity="0.25" stroke="#00ffff" stroke-width="1.2"/>
+        <circle cx="13" cy="27" r="2.2" fill="#fff"/>
+        <circle cx="23" cy="27" r="2.2" fill="#fff"/>
+        <circle cx="13.8" cy="27.2" r="1" fill="#0a0a0a"/>
+        <circle cx="23.8" cy="27.2" r="1" fill="#0a0a0a"/>
+        <path d="M14 33 Q18 37 22 33" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+        <ellipse cx="10" cy="20" rx="2" ry="1.5" fill="#fff" opacity="0.35"/>
+      </svg>
+      <div class="subtitle">AI Query Water Usage Analyzer</div>
+    </div>
+    <div style="text-align:right">
+      <div class="gen-time" id="genTime"></div>
+      <div class="live-badge">
+        <span class="live-dot"></span> LIVE — auto-refreshes every 30s
+        <button class="refresh-btn" onclick="location.reload()">REFRESH NOW</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO: beaker | metrics | globe -->
+  <section class="hero">
+    <div class="tank-wrap" style="position:relative">
+      <svg class="cloud-decor" viewBox="0 0 160 50" width="160" height="50">
+        <path d="M30 36c-9 0-16-6-16-13s6-11 13-11c1-7 8-12 16-12 10 0 18 6 18 15h2c7 0 13 4 13 10s-4 9-10 10h-2c-2 3-7 5-13 5h-5c-5 0-10-1-13-2h-3z" fill="none" stroke="#00ffff" stroke-width="0.6"/>
+        <line x1="50" y1="40" x2="48" y2="47" stroke="#00ffff" stroke-width="0.4" opacity="0.3"/>
+        <line x1="65" y1="39" x2="64" y2="46" stroke="#00ffff" stroke-width="0.4" opacity="0.3"/>
+        <line x1="80" y1="40" x2="78" y2="47" stroke="#00ffff" stroke-width="0.4" opacity="0.3"/>
+        <line x1="95" y1="39" x2="94" y2="45" stroke="#00ffff" stroke-width="0.4" opacity="0.3"/>
+      </svg>
+      <canvas id="tankCanvas" width="440" height="800"></canvas>
+      <div class="tank-label">1 TOILET FLUSH = 6 LITERS</div>
+    </div>
+    <div class="metrics">
+      <div class="metric-group clickable active" id="metricConsumed" onclick="setBenchMode('consumed')" style="color:#00ffff">
+        <div class="metric-label">Consumed (evaporated)</div>
+        <div><span class="metric-value" id="consumed">0.00</span><span class="metric-unit">mL</span></div>
+      </div>
+      <div class="metric-group clickable" id="metricWithdrawn" onclick="setBenchMode('withdrawn')" style="color:#ff00ff">
+        <div class="metric-label">Withdrawn (total intake)</div>
+        <div><span class="metric-value magenta" id="withdrawn">0.00</span><span class="metric-unit">mL</span></div>
+      </div>
+      <div class="metric-group">
+        <div class="metric-label">Energy</div>
+        <div><span class="metric-value gold" id="energy">0.00</span><span class="metric-unit">Wh</span></div>
+      </div>
+      <div class="nearest-box">
+        <span class="lbl">That's about</span>
+        <span id="nearestText">nothing yet</span>
+      </div>
+      <div class="events-badge"><span id="eventsText">0 events across 0 sessions</span></div>
+    </div>
+
+    <!-- Globe: draining Earth + distribution slider -->
+    <div class="globe-col">
+      <div class="globe-inner">
+        <div class="dist-wrap">
+          <span class="dist-lbl top">MORE</span>
+          <div class="dist-track">
+            <input type="range" id="distSlider" min="0" max="100" value="50" step="1">
+          </div>
+          <span class="dist-lbl bot">LESS</span>
+        </div>
+        <canvas id="globeCanvas" width="640" height="640"></canvas>
+      </div>
+      <div class="globe-stats">
+        <div class="globe-label" title="Bottom-up user distribution model validated against IEA top-down energy estimate. See citations below.">EST. GLOBAL AI WATER USE</div>
+        <div><span class="globe-counter" id="globeCounter">---</span> <span class="globe-unit">L today</span></div>
+        <div class="globe-rate"><span id="globeRate">~7,000</span> L/sec worldwide</div>
+        <div class="globe-you">you: <span id="globeYou">0.000</span> mL</div>
+        <div class="globe-pct">AI &asymp; 0.005% of global freshwater withdrawal</div>
+        <div class="dist-readout"><span id="distLabel">1.0</span>&times; current estimate</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- UNCERTAINTY BAR -->
+  <section class="unc-bar">
+    <div class="unc-bar-inner">
+      <span class="unc-endpoint lo" id="uncLow">--</span>
+      <input type="range" id="uncSlider" class="unc-slider-bar" min="0" max="100" value="100" step="1">
+      <span class="unc-endpoint hi" id="uncHigh">--</span>
+    </div>
+    <div class="unc-bar-readout"><span id="scenarioLabel">CENTRAL</span> &mdash; <span id="scenarioMl">0.0</span> mL</div>
+  </section>
+
+  <!-- BENCHMARKS -->
+  <section class="bench-section">
+    <div class="panel-title">How Much Is That, Really? <span id="benchModeLabel" style="color:#00ffff;font-weight:700">consumed</span></div>
+    <div class="bench-grid" id="benchGrid"></div>
+  </section>
+
+  <!-- GRID -->
+  <section class="grid">
+    <div class="panel">
+      <div class="panel-title">Sessions Today</div>
+      <div id="sessionsList"><div class="empty">No sessions</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Accumulation</div>
+      <canvas id="timelineCanvas" width="800" height="360"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Tool Breakdown</div>
+      <div id="toolsList"><div class="empty">No tool data</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Token Breakdown</div>
+      <div id="tokenPanel" style="font-size:12px;line-height:2.4;color:#808080">
+        <div style="display:flex;justify-content:space-between"><span>Input tokens</span><span style="color:#00ffff" id="rawInput">0</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Output tokens</span><span style="color:#00ffff" id="rawOutput">0</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Thinking tokens</span><span style="color:#ff00ff" id="rawThinking">0</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Agent sub-turns</span><span style="color:#ffd700" id="rawAgentTurns">0</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <div class="history-wrap">
+    <div class="panel-title">Last 7 Days</div>
+    <div class="history-bars" id="historyBars"><div class="empty">No history</div></div>
+  </div>
+
+  <!-- CITATIONS -->
+  <div class="citations">
+    <div class="cite-title">[ Sources &amp; Methodology ]</div>
+    <strong>IEA Energy:</strong> <a href="https://www.iea.org/reports/electricity-2024" target="_blank">IEA Electricity 2024</a> &mdash; AI datacenter energy projected at 100&ndash;150 TWh/yr by 2026.<br>
+    <strong>Google Cloud WUE:</strong> <a href="https://sustainability.google/reports/google-2024-environmental-report/" target="_blank">Google Environmental Report 2024</a> &mdash; Water Usage Effectiveness 1.08 L/kWh; Gemini median prompt: 0.24 Wh, 0.26 mL.<br>
+    <strong>Grid Water:</strong> Macknick et al. (2012), <em>Operational water consumption and withdrawal factors for electricity generating technologies</em> &mdash; US avg 1.8 L/kWh consumption, 4.5 L/kWh withdrawal.<br>
+    <strong>Renewables:</strong> Ember Global Electricity Review 2024 &mdash; 30&ndash;64% renewable share depending on region.<br>
+    <strong>User Distribution:</strong> Bottom-up model: 800M MAU across 5 segments (casual&rarr;agentic), &times;8 non-chatbot AI, &times;2.5 infrastructure overhead. Validated against IEA top-down (540&ndash;810M L/day).
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    AQUA v2 &mdash; Calibrated to Google Cloud Aug 2025 Gemini disclosure
+    &mdash; Re-run <code>python3 ~/water-tracker/aqua_dashboard.py</code> to refresh
+  </div>
+</div>
+
+<script>
+// Data baked in by aqua_dashboard.py (replaced at generation time)
+const DATA = "__DATA_PLACEHOLDER__";
+
+// =========================================================================
+// WATER CALCULATION (mirrors aqua_cli.py technoeconomic model)
+// =========================================================================
+const PARAMS = {
+  energy: {
+    haiku:  {low:0.15, cen:0.4,  high:1.0},
+    sonnet: {low:0.8,  cen:2.0,  high:5.0},
+    opus:   {low:1.5,  cen:4.0,  high:10.0},
+  },
+  wue:   {low:0.5,  cen:1.08, high:1.8},
+  gr_c:  {low:0.8,  cen:1.8,  high:2.7},
+  gr_w:  {low:2.0,  cen:4.5,  high:7.0},
+  renew: {low:0.64, cen:0.50, high:0.30},
+};
+
+function lerp3(low, cen, high, p) {
+  // p: 0=low, 0.5=central, 1.0=high
+  if (p <= 0.5) return low + (cen - low) * (p / 0.5);
+  return cen + (high - cen) * ((p - 0.5) / 0.5);
+}
+
+function calcWater(inp, out, think, model, p) {
+  const ep = PARAMS.energy[model] || PARAMS.energy.opus;
+  const e = lerp3(ep.low, ep.cen, ep.high, p);
+  const wue = lerp3(PARAMS.wue.low, PARAMS.wue.cen, PARAMS.wue.high, p);
+  const gr_c = lerp3(PARAMS.gr_c.low, PARAMS.gr_c.cen, PARAMS.gr_c.high, p);
+  const gr_w = lerp3(PARAMS.gr_w.low, PARAMS.gr_w.cen, PARAMS.gr_w.high, p);
+  const renew = lerp3(PARAMS.renew.low, PARAMS.renew.cen, PARAMS.renew.high, p);
+  const equiv = (inp||0) * 0.25 + (out||0) + (think||0);
+  const energy_wh = equiv * e / 3600;
+  return {
+    consumption_ml: energy_wh * wue + energy_wh * gr_c * (1 - renew),
+    withdrawal_ml:  energy_wh * wue + energy_wh * gr_w * (1 - renew),
+    energy_wh: energy_wh
+  };
+}
+
+function computeBenchmarks(ml) {
+  if (ml <= 0) return {toilets:0,shower_sec:0,glasses:0,raindrops:0,bottles:0,daily_pct:0,faucet_sec:0,ice_cubes:0};
+  return {
+    toilets: ml/6000, shower_sec: ml/(9500/60), glasses: ml/240,
+    raindrops: Math.round(ml/0.05), bottles: ml/500,
+    daily_pct: (ml/1596610)*100, faucet_sec: ml/(8300/60), ice_cubes: ml/18,
+  };
+}
+
+const COMPARISONS = [
+  [0.05,"a single raindrop"],[0.26,"a few drops"],[1.0,"1/5 of a teaspoon"],
+  [5.0,"a teaspoon"],[15.0,"a tablespoon"],[30.0,"a medicine cup"],
+  [60.0,"a shot glass"],[120.0,"a quarter cup"],[240.0,"a cup of water"],
+  [355.0,"a can of soda"],[500.0,"a water bottle"],[750.0,"a wine bottle"],
+  [1000.0,"a liter bottle"],[3785.0,"a gallon jug"],
+];
+function nearest(ml) {
+  if (ml <= 0) return 'nothing yet';
+  for (let i = 0; i < COMPARISONS.length; i++) {
+    if (ml < COMPARISONS[i][0]) return i > 0 ? 'about ' + COMPARISONS[i-1][1] : 'less than ' + COMPARISONS[i][1];
+  }
+  return 'more than ' + COMPARISONS[COMPARISONS.length-1][1];
+}
+
+// =========================================================================
+// WATER TANK — beaker animation (6000 mL = one toilet flush)
+// =========================================================================
+const TANK_MAX = 6000;
+class WaterTank {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.W = 440; this.H = 800;
+    this.bk = { l: 60, r: 380, t: 60, b: 740 };
+    this.targetLevel = 0; this.level = 0;
+    this.drops = []; this.splashes = []; this.bubbles = [];
+    this.t = 0;
+  }
+  setLevel(ml, max) { this.targetLevel = Math.min((ml||0)/(max||TANK_MAX), 1); }
+  spawnDrop() {
+    const b = this.bk;
+    this.drops.push({ x:b.l+30+Math.random()*(b.r-b.l-60), y:10+Math.random()*30, vy:0, r:2+Math.random()*3, a:1 });
+  }
+  update(dt) {
+    this.t += dt;
+    this.level += (this.targetLevel - this.level) * 0.025;
+    const b = this.bk, surfY = b.b - this.level*(b.b-b.t);
+    for (const d of this.drops) {
+      d.vy += 0.4; d.y += d.vy;
+      if (d.y >= surfY-d.r && d.a > 0) {
+        const parts = [];
+        for (let i=0;i<5;i++) parts.push({x:d.x,y:surfY,vx:(Math.random()-.5)*5,vy:-Math.random()*6-2,r:1+Math.random()*1.5,a:1});
+        this.splashes.push({x:d.x,y:surfY,parts,ring:{r:0,a:0.8}});
+        this.bubbles.push({x:d.x+(Math.random()-.5)*16,y:surfY+15+Math.random()*30,r:1+Math.random()*2,a:.5+Math.random()*.3,vx:(Math.random()-.5)*.4});
+        d.a=0;
+      }
+    }
+    this.drops = this.drops.filter(d=>d.a>0);
+    for (const s of this.splashes) { s.ring.r+=2; s.ring.a-=.03; for(const p of s.parts){p.vy+=.25;p.x+=p.vx;p.y+=p.vy;p.a-=.03;} }
+    this.splashes = this.splashes.filter(s=>s.ring.a>0);
+    for (const bb of this.bubbles) { bb.y-=.7; bb.x+=bb.vx; bb.a-=.005; }
+    this.bubbles = this.bubbles.filter(bb=>bb.a>0&&bb.y>surfY);
+    if(this.drops.length>12) this.drops=this.drops.slice(-12);
+    if(this.bubbles.length>20) this.bubbles=this.bubbles.slice(-20);
+  }
+  draw() {
+    const ctx=this.ctx, b=this.bk, W=this.W, H=this.H;
+    ctx.clearRect(0,0,W,H);
+    const surfY = b.b - this.level*(b.b-b.t);
+    // Water
+    if(this.level>.001){
+      const grad=ctx.createLinearGradient(0,surfY,0,b.b);
+      grad.addColorStop(0,'rgba(0,255,255,0.35)');grad.addColorStop(.5,'rgba(0,180,200,0.5)');grad.addColorStop(1,'rgba(0,80,120,0.6)');
+      ctx.beginPath(); ctx.moveTo(b.l,surfY);
+      for(let x=b.l;x<=b.r;x++){const w=Math.sin((x-b.l)*.05+this.t*3)*3+Math.sin((x-b.l)*.1+this.t*5)*1.5+Math.sin((x-b.l)*.02+this.t*2)*2;ctx.lineTo(x,surfY+w);}
+      ctx.lineTo(b.r,b.b);ctx.lineTo(b.l,b.b);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+      ctx.beginPath();
+      for(let x=b.l;x<=b.r;x++){const w=Math.sin((x-b.l)*.05+this.t*3)*3+Math.sin((x-b.l)*.1+this.t*5)*1.5+Math.sin((x-b.l)*.02+this.t*2)*2;x===b.l?ctx.moveTo(x,surfY+w):ctx.lineTo(x,surfY+w);}
+      ctx.strokeStyle='rgba(0,255,255,0.7)';ctx.lineWidth=2;ctx.shadowColor='#00ffff';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0;
+    }
+    // Bubbles
+    for(const bb of this.bubbles){ctx.beginPath();ctx.arc(bb.x,bb.y,bb.r,0,Math.PI*2);ctx.strokeStyle=`rgba(0,255,255,${bb.a*.6})`;ctx.lineWidth=1;ctx.stroke();}
+    // Beaker
+    ctx.strokeStyle='rgba(0,255,255,0.5)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(b.l,b.t);ctx.lineTo(b.l,b.b);ctx.lineTo(b.r,b.b);ctx.lineTo(b.r,b.t);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(b.l,b.t);ctx.lineTo(b.l-12,b.t-8);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(b.r,b.t);ctx.lineTo(b.r+12,b.t-8);ctx.stroke();
+    // Ticks — 6000 mL scale
+    ctx.strokeStyle='rgba(0,255,255,0.2)';ctx.lineWidth=1;ctx.fillStyle='rgba(0,255,255,0.35)';
+    ctx.font='14px JetBrains Mono,monospace';ctx.textAlign='right';
+    for(let ml=1000;ml<=6000;ml+=1000){
+      const y=b.b-(ml/TANK_MAX)*(b.b-b.t);
+      ctx.beginPath();ctx.moveTo(b.l,y);ctx.lineTo(b.l+14,y);ctx.stroke();
+      ctx.fillText((ml>=1000?(ml/1000)+'L':ml+''),b.l-6,y+5);
+    }
+    ctx.strokeStyle='rgba(0,255,255,0.06)';
+    for(let ml=500;ml<=6000;ml+=500){if(ml%1000===0)continue;const y=b.b-(ml/TANK_MAX)*(b.b-b.t);ctx.beginPath();ctx.moveTo(b.l,y);ctx.lineTo(b.l+7,y);ctx.stroke();}
+    // "FLUSH" label at top
+    ctx.fillStyle='rgba(0,255,255,0.15)';ctx.font='11px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('ONE FLUSH',b.l+(b.r-b.l)/2,b.t-14);
+    // Drops
+    for(const d of this.drops){ctx.beginPath();ctx.arc(d.x,d.y,d.r+3,0,Math.PI*2);ctx.fillStyle=`rgba(0,255,255,${d.a*.12})`;ctx.fill();ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fillStyle=`rgba(0,255,255,${d.a*.8})`;ctx.fill();ctx.beginPath();ctx.arc(d.x-d.r*.3,d.y-d.r*.3,d.r*.35,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${d.a*.25})`;ctx.fill();}
+    // Splashes
+    for(const s of this.splashes){if(s.ring.a>0){ctx.beginPath();ctx.ellipse(s.x,s.y,s.ring.r,s.ring.r*.3,0,0,Math.PI*2);ctx.strokeStyle=`rgba(0,255,255,${s.ring.a*.5})`;ctx.lineWidth=1.5;ctx.stroke();}for(const p of s.parts){if(p.a>0){ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(0,255,255,${p.a})`;ctx.fill();}}}
+    // Scanlines
+    ctx.fillStyle='rgba(0,0,0,0.02)';for(let y=0;y<H;y+=4) ctx.fillRect(0,y,W,1);
+    // Level label
+    if(this.level>.005){const ml=(this.level*TANK_MAX).toFixed(0);ctx.font='bold 16px JetBrains Mono,monospace';ctx.fillStyle='rgba(0,255,255,0.6)';ctx.textAlign='left';ctx.fillText(ml+' mL',b.r+8,surfY+5);}
+  }
+}
+
+// =========================================================================
+// GLOBE — Earth with draining water revealing dry land
+// =========================================================================
+const CONTINENTS = [
+  // North America
+  [[.22,.12],[.30,.09],[.37,.11],[.42,.17],[.43,.26],[.40,.33],[.36,.38],[.30,.40],[.24,.38],[.19,.30],[.18,.22]],
+  // Central America / Caribbean
+  [[.32,.42],[.36,.40],[.40,.42],[.42,.48],[.38,.50],[.34,.48]],
+  // South America
+  [[.30,.52],[.36,.50],[.40,.54],[.40,.62],[.38,.72],[.34,.76],[.30,.74],[.28,.64],[.28,.56]],
+  // Europe
+  [[.50,.14],[.55,.11],[.60,.14],[.62,.20],[.60,.26],[.56,.28],[.52,.26],[.50,.20]],
+  // Africa
+  [[.52,.30],[.58,.28],[.63,.34],[.66,.46],[.64,.58],[.60,.64],[.55,.66],[.51,.60],[.50,.46],[.50,.36]],
+  // Asia
+  [[.60,.08],[.70,.06],[.80,.08],[.88,.16],[.90,.26],[.87,.34],[.80,.38],[.74,.37],[.68,.32],[.63,.24],[.60,.16]],
+  // India
+  [[.68,.34],[.72,.32],[.76,.36],[.75,.44],[.72,.48],[.68,.44]],
+  // Australia
+  [[.78,.58],[.86,.56],[.90,.60],[.90,.66],[.85,.70],[.78,.68],[.76,.62]],
+  // Greenland
+  [[.36,.04],[.40,.02],[.44,.04],[.44,.10],[.40,.12],[.36,.10]],
+  // Antarctica
+  [[.20,.90],[.35,.88],[.50,.86],[.65,.88],[.80,.90],[.65,.94],[.35,.94]],
+];
+
+// Mountain peaks / highlands that emerge as dry spots through the water
+// [x, y, emergence_threshold (lower=emerges earlier), max_radius]
+// Thresholds calibrated to drain range 0→0.22 over a full day
+const PEAKS = [
+  // Himalayas / Tibetan Plateau — highest, first to emerge
+  [.73,.27, 0.005, .032], [.76,.30, 0.01, .022], [.70,.25, 0.015, .018],
+  // Central Asian Highlands
+  [.80,.18, 0.02, .024], [.84,.22, 0.03, .016],
+  // Andes
+  [.32,.58, 0.025, .016], [.30,.64, 0.035, .013], [.33,.70, 0.05, .011],
+  // Rockies / Sierra Nevada
+  [.26,.22, 0.03, .019], [.28,.28, 0.045, .014], [.24,.18, 0.06, .011],
+  // Alps / Caucasus
+  [.56,.18, 0.04, .013], [.60,.22, 0.055, .010],
+  // East African Rift / Kilimanjaro
+  [.58,.48, 0.05, .013], [.56,.55, 0.065, .010],
+  // Scandinavian Mountains
+  [.52,.12, 0.07, .010],
+  // Greenland Ice Cap
+  [.39,.06, 0.06, .016], [.41,.08, 0.08, .012],
+  // Appalachians
+  [.36,.26, 0.08, .012],
+  // Japanese / Korean Highlands
+  [.87,.28, 0.075, .008],
+  // Australian Great Dividing Range
+  [.85,.62, 0.09, .012],
+  // Brazilian Highlands
+  [.36,.56, 0.095, .013],
+  // Atlas Mountains / Sahara Highlands
+  [.54,.32, 0.07, .012],
+  // Mexican Highlands
+  [.32,.36, 0.10, .010],
+  // Antarctic Peaks
+  [.40,.88, 0.11, .018], [.58,.88, 0.12, .015], [.50,.90, 0.13, .012],
+  // Indian Deccan Plateau
+  [.70,.40, 0.10, .012],
+  // Siberian Central Plateau
+  [.76,.12, 0.11, .016],
+  // Ural Mountains
+  [.64,.14, 0.09, .008],
+  // Ethiopian Highlands
+  [.60,.42, 0.08, .010],
+  // New Zealand
+  [.92,.68, 0.12, .007],
+  // Papua New Guinea Highlands
+  [.90,.50, 0.11, .008],
+];
+
+class GlobeViz {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.W = canvas.width;
+    this.H = canvas.height;
+    this.cx = this.W / 2;
+    this.cy = this.H / 2;
+    this.r = Math.min(this.W, this.H) * 0.44;
+    this.t = 0;
+    // Water level: 1.0 = fully submerged, 0.0 = fully drained
+    // Starts fully covered — dry spots (peaks) emerge first, then waterline drops
+    this.waterFrac = 0.99;
+    this.targetWaterFrac = 0.99;
+  }
+
+  setDrain(dayProgress) {
+    // dayProgress 0→1 over 24 hours
+    // Water drops from 99% → 77% (22% visual drain over full day)
+    // At start: essentially fully blue. By end: significant land visible.
+    this.targetWaterFrac = 0.99 - dayProgress * 0.22;
+  }
+
+  update(dt) {
+    this.t += dt;
+    this.waterFrac += (this.targetWaterFrac - this.waterFrac) * 0.008;
+  }
+
+  draw() {
+    const ctx = this.ctx, W = this.W, H = this.H;
+    const cx = this.cx, cy = this.cy, r = this.r;
+    ctx.clearRect(0, 0, W, H);
+
+    // Clip to globe circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Full ocean — fills the entire globe
+    const waterGrad = ctx.createLinearGradient(0, cy - r, 0, cy + r);
+    waterGrad.addColorStop(0, '#004858');
+    waterGrad.addColorStop(0.3, '#005a6e');
+    waterGrad.addColorStop(0.6, '#003a50');
+    waterGrad.addColorStop(1, '#001828');
+    ctx.fillStyle = waterGrad;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+    // Drained area above waterline — dark exposed seabed
+    const waterY = cy - r + (1 - this.waterFrac) * r * 2;
+    if (waterY > cy - r + 1) {
+      ctx.fillStyle = '#040806';
+      ctx.fillRect(cx - r, cy - r, r * 2, waterY - (cy - r));
+    }
+
+    // Wave at water surface
+    if (waterY > cy - r + 2) {
+      ctx.beginPath();
+      for (let x = cx - r; x <= cx + r; x += 2) {
+        const w = Math.sin(x * 0.02 + this.t * 1.2) * 3
+                + Math.sin(x * 0.055 + this.t * 2.2) * 1.5
+                + Math.sin(x * 0.008 + this.t * 0.6) * 2;
+        x === cx - r ? ctx.moveTo(x, waterY + w) : ctx.lineTo(x, waterY + w);
+      }
+      ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = '#00ffff';
+      ctx.shadowBlur = 5;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Dry spots — mountain peaks emerging as dark dots through the water
+    const drainAmt = 1 - this.waterFrac;
+    for (const [px, py, thresh, maxR] of PEAKS) {
+      if (drainAmt <= thresh) continue;
+      const growth = Math.min((drainAmt - thresh) / 0.05, 1.0);
+      const pr = maxR * growth * r;
+      if (pr < 0.8) continue;
+      const peakX = cx - r + px * r * 2;
+      const peakY = cy - r + py * r * 2;
+      // Only draw within the water area (above waterline is already dark)
+      if (peakY < waterY) continue;
+      // Simple dark circle
+      ctx.beginPath();
+      ctx.arc(peakX, peakY, pr, 0, Math.PI * 2);
+      ctx.fillStyle = '#040806';
+      ctx.fill();
+    }
+
+    // Faint latitude grid lines through water
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+    ctx.lineWidth = 0.5;
+    for (let lat = -60; lat <= 60; lat += 30) {
+      const y = cy + (lat / 90) * r;
+      const rx = Math.sqrt(Math.max(r * r - (y - cy) * (y - cy), 0));
+      if (rx > 2) {
+        ctx.beginPath();
+        ctx.ellipse(cx, y, rx, 3, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore(); // remove clip
+
+    // Globe outline ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Outer glow
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.06)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Scanlines
+    ctx.fillStyle = 'rgba(0,0,0,0.02)';
+    for (let y = Math.round(cy - r); y < cy + r; y += 3) ctx.fillRect(cx - r, y, r * 2, 1);
+
+    // "DRAIN" indicator — small text showing water level %
+    const pct = (this.waterFrac * 100).toFixed(1);
+    ctx.fillStyle = 'rgba(0,255,255,0.2)';
+    ctx.font = '11px JetBrains Mono,monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(pct + '% water', cx + r - 4, cy - r + 16);
+  }
+}
+
+// =========================================================================
+// TIMELINE CHART
+// =========================================================================
+function drawTimeline(tl) {
+  const c = document.getElementById('timelineCanvas');
+  const dpr = window.devicePixelRatio||1;
+  const cw=c.clientWidth, ch=c.clientHeight;
+  c.width=cw*dpr; c.height=ch*dpr;
+  const ctx=c.getContext('2d'); ctx.scale(dpr,dpr);
+  const W=cw,H=ch,pad=36;
+  ctx.clearRect(0,0,W,H);
+  if(!tl||!tl.length){ctx.fillStyle='#333';ctx.font='12px JetBrains Mono';ctx.textAlign='center';ctx.fillText('No events yet',W/2,H/2);return;}
+  const mx=Math.max(...tl.map(t=>t.ml),.1);
+  ctx.strokeStyle='rgba(0,255,255,0.07)';ctx.lineWidth=.5;ctx.fillStyle='rgba(0,255,255,0.3)';ctx.font='9px JetBrains Mono';ctx.textAlign='right';
+  for(let i=0;i<=4;i++){const y=pad+(H-2*pad)*(1-i/4);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-10,y);ctx.stroke();ctx.fillText((mx*i/4).toFixed(1),pad-4,y+3);}
+  ctx.beginPath();
+  for(let i=0;i<tl.length;i++){const x=pad+(W-pad-10)*(i/Math.max(tl.length-1,1)),y=pad+(H-2*pad)*(1-tl[i].ml/mx);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.lineTo(pad+(W-pad-10),H-pad);ctx.lineTo(pad,H-pad);ctx.closePath();
+  const gr=ctx.createLinearGradient(0,pad,0,H-pad);gr.addColorStop(0,'rgba(0,255,255,0.25)');gr.addColorStop(1,'rgba(0,255,255,0.02)');ctx.fillStyle=gr;ctx.fill();
+  ctx.beginPath();
+  for(let i=0;i<tl.length;i++){const x=pad+(W-pad-10)*(i/Math.max(tl.length-1,1)),y=pad+(H-2*pad)*(1-tl[i].ml/mx);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.strokeStyle='#00ffff';ctx.lineWidth=2;ctx.shadowColor='#00ffff';ctx.shadowBlur=8;ctx.stroke();ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(0,255,255,0.4)';ctx.font='10px JetBrains Mono';ctx.textAlign='left';
+  ctx.fillText(tl[0].t.substring(0,5),pad,H-6);ctx.textAlign='right';ctx.fillText(tl[tl.length-1].t.substring(0,5),W-10,H-6);
+  ctx.fillStyle='#00ffff';ctx.font='bold 11px JetBrains Mono';ctx.fillText(tl[tl.length-1].ml.toFixed(1)+' mL',W-10,pad-8);
+}
+
+// =========================================================================
+// UI RENDERING
+// =========================================================================
+// =========================================================================
+// BENCH MODE — toggle between consumed / withdrawn
+// =========================================================================
+let benchMode = 'consumed';
+let currentConsumedMl = 0;
+let currentWithdrawnMl = 0;
+
+function setBenchMode(mode) {
+  benchMode = mode;
+  // Toggle active class
+  const mc = document.getElementById('metricConsumed');
+  const mw = document.getElementById('metricWithdrawn');
+  if (mc) mc.classList.toggle('active', mode === 'consumed');
+  if (mw) mw.classList.toggle('active', mode === 'withdrawn');
+  // Update label
+  const lbl = document.getElementById('benchModeLabel');
+  if (lbl) {
+    lbl.textContent = mode;
+    lbl.style.color = mode === 'consumed' ? '#00ffff' : '#ff00ff';
+  }
+  // Re-render benchmarks with the selected value
+  const ml = mode === 'consumed' ? currentConsumedMl : currentWithdrawnMl;
+  renderBenchmarks(computeBenchmarks(ml), ml);
+}
+
+const TOOL_COLORS={Read:'#00cccc',Glob:'#009999',Grep:'#00aaaa',Edit:'#ff00ff',Write:'#cc00cc',Bash:'#00ff00',Task:'#ffd700',WebFetch:'#ff6b00',WebSearch:'#ff8c00',AskUserQuestion:'#8888ff',Skill:'#aa66ff',prompt:'#e0e0e0'};
+
+function render(d) {
+  document.getElementById('consumed').textContent = d.today.consumption_ml.toFixed(2);
+  document.getElementById('withdrawn').textContent = d.today.withdrawal_ml.toFixed(2);
+  document.getElementById('energy').textContent = d.today.energy_wh.toFixed(2);
+  document.getElementById('nearestText').textContent = d.today.nearest;
+  document.getElementById('eventsText').textContent = d.today.events + ' events across ' + d.today.sessions + ' sessions';
+  document.getElementById('genTime').textContent = 'GENERATED ' + d.generated;
+
+  currentConsumedMl = d.today.consumption_ml;
+  currentWithdrawnMl = d.today.withdrawal_ml;
+  const benchMl = benchMode === 'consumed' ? currentConsumedMl : currentWithdrawnMl;
+  renderBenchmarks(computeBenchmarks(benchMl), benchMl);
+  renderSessions(d.sessions);
+  drawTimeline(d.timeline);
+  renderTools(d.tools);
+  renderUncertainty(d.scenarios);
+  renderTokens(d.raw_tokens);
+  renderHistory(d.history);
+}
+
+const IC = {
+  toilet: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="2" width="8" height="6" rx="1"/><path d="M6 8h16c1 0 1.5.7 1.5 1.5v1c0 4-3.5 6.5-9.5 6.5S4.5 14.5 4.5 10.5v-1C4.5 8.7 5 8 6 8z"/><rect x="10" y="17" width="8" height="2.5" rx=".5"/><line x1="14" y1="19.5" x2="14" y2="23"/><line x1="10" y1="23" x2="18" y2="23"/></svg>',
+  shower: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="10" cy="6" r="4"/><path d="M21 2v8h-7"/><line x1="6" y1="13" x2="6" y2="19" opacity=".5"/><line x1="9" y1="12" x2="9" y2="20" opacity=".5"/><line x1="12" y1="13" x2="12" y2="21" opacity=".5"/><line x1="15" y1="12" x2="15" y2="18" opacity=".5"/></svg>',
+  glass: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h12l-2 19H10z"/><path d="M10 14h8" opacity=".4"/><path d="M10 10h8" opacity=".2"/></svg>',
+  drop: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M14 3C14 3 5 14 5 19c0 5 4 8 9 8s9-3 9-8C23 14 14 3 14 3z"/><ellipse cx="10" cy="18" rx="2" ry="1.5" fill="currentColor" opacity=".2"/></svg>',
+  bottle: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="11" y="1" width="6" height="4" rx="1"/><path d="M11 5v2c-2 1-3 3-3 5v10c0 1 1 2 2 2h8c1 0 2-1 2-2V12c0-2-1-4-3-5V5"/><line x1="8" y1="15" x2="20" y2="15" opacity=".3"/></svg>',
+  cube: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M14 4l10 5v10L14 24 4 19V9z"/><path d="M14 4v20M4 9l10 5 10-5" opacity=".35"/></svg>',
+  faucet: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M3 8h11v5H3z"/><line x1="14" y1="8" x2="14" y2="19"/><path d="M14 10h8c1.5 0 2.5 1 2.5 2.5s-1 2.5-2.5 2.5h-8"/><circle cx="14" cy="22" r="1.3" fill="currentColor" opacity=".6"/><circle cx="14" cy="25.5" r="0.8" fill="currentColor" opacity=".3"/></svg>',
+  house: '<svg class="icon" viewBox="0 0 28 28" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14L14 5l10 9"/><rect x="7" y="14" width="14" height="10"/><rect x="12" y="18" width="4" height="6"/></svg>',
+};
+const COL_MAP = {cyan:'#00ffff',magenta:'#ff00ff',green:'#00ff00',gold:'#ffd700'};
+
+function renderBenchmarks(bm, ml) {
+  const el = document.getElementById('benchGrid');
+  if (!bm || ml <= 0) { el.innerHTML = '<div class="empty" style="grid-column:1/-1">Start a session to see benchmarks</div>'; return; }
+  const cards = [
+    { icon: IC.toilet, num: fmtToilets(bm.toilets), label: 'TOILET FLUSHES', sub: '6 liters per flush', color: 'cyan', pct: Math.min(bm.toilets*100, 100) },
+    { icon: IC.shower, num: bm.shower_sec.toFixed(1)+'s', label: 'OF SHOWER TIME', sub: '9.5 L/min standard head', color: 'magenta', pct: Math.min(bm.shower_sec/60*100, 100) },
+    { icon: IC.glass, num: bm.glasses.toFixed(1), label: 'GLASSES OF WATER', sub: '240 mL (8 oz) each', color: 'green', pct: Math.min(bm.glasses/8*100, 100) },
+    { icon: IC.drop, num: fmtNum(bm.raindrops), label: 'RAINDROPS', sub: '~0.05 mL each', color: 'gold', pct: Math.min(bm.raindrops/100000*100, 100) },
+    { icon: IC.bottle, num: bm.bottles.toFixed(2), label: 'WATER BOTTLES', sub: '500 mL each', color: 'cyan', pct: Math.min(bm.bottles*100, 100) },
+    { icon: IC.cube, num: bm.ice_cubes.toFixed(0), label: 'ICE CUBES', sub: '~18 mL each', color: 'magenta', pct: Math.min(bm.ice_cubes/50*100, 100) },
+    { icon: IC.faucet, num: bm.faucet_sec.toFixed(1)+'s', label: 'OF TAP WATER', sub: 'kitchen faucet 8.3 L/min', color: 'green', pct: Math.min(bm.faucet_sec/60*100, 100) },
+    { icon: IC.house, num: bm.daily_pct.toFixed(3)+'%', label: 'OF DAILY USE', sub: 'avg American: 1,597 L/day', color: 'gold', pct: Math.min(bm.daily_pct, 100) },
+  ];
+  el.innerHTML = cards.map(c =>
+    '<div class="bench-card" style="color:'+COL_MAP[c.color]+'">' +
+      c.icon +
+      '<div class="num '+c.color+'">'+c.num+'</div>' +
+      '<div class="label">'+c.label+'</div>' +
+      '<div class="sub">'+c.sub+'</div>' +
+      '<div class="bar-bg"><div class="bar-fill" style="width:'+c.pct+'%;background:'+COL_MAP[c.color]+'"></div></div>' +
+    '</div>'
+  ).join('');
+}
+
+function fmtToilets(n) {
+  if (n >= 1) return n.toFixed(1);
+  if (n >= 0.01) return n.toFixed(2);
+  return n.toFixed(3);
+}
+function fmtNum(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+  return n.toString();
+}
+
+function renderSessions(sessions) {
+  const el = document.getElementById('sessionsList');
+  if (!sessions.length) { el.innerHTML = '<div class="empty">No sessions today</div>'; return; }
+  el.innerHTML = sessions.map(s =>
+    '<div class="session-row">' +
+      '<div class="session-dot '+(s.active?'active':'ended')+'"></div>' +
+      '<div class="session-dir">'+esc(s.dir)+'</div>' +
+      '<div class="session-events">'+s.events+' ev</div>' +
+      '<div class="session-ml">'+s.consumption_ml.toFixed(1)+' mL</div>' +
+      '<div class="session-time">'+esc(s.started)+'</div>' +
+    '</div>'
+  ).join('');
+}
+
+function renderTools(tools) {
+  const el = document.getElementById('toolsList');
+  if (!tools.length) { el.innerHTML = '<div class="empty">No tool data</div>'; return; }
+  const mx = Math.max(...tools.map(t=>t.count));
+  el.innerHTML = tools.slice(0,10).map(t => {
+    const pct = (t.count/mx)*100, col = TOOL_COLORS[t.name]||'#808080';
+    return '<div class="tool-row">'+
+      '<span class="tool-name">'+esc(t.name||'other')+'</span>'+
+      '<div class="tool-bar-bg"><div class="tool-bar" style="width:'+pct+'%;background:'+col+';box-shadow:0 0 8px '+col+'44"></div></div>'+
+      '<span class="tool-count">'+t.count+'</span>'+
+      '<span class="tool-ml">'+t.ml.toFixed(1)+' mL</span></div>';
+  }).join('');
+}
+
+function renderUncertainty(sc) {
+  if (!sc) return;
+  const low = document.getElementById('uncLow');
+  const hi = document.getElementById('uncHigh');
+  if (low) low.textContent = sc.low.toFixed(1) + ' mL';
+  if (hi) hi.textContent = sc.high.toFixed(1) + ' mL';
+  const ml = document.getElementById('scenarioMl');
+  if (ml) ml.textContent = sc.central.toFixed(1);
+}
+
+function renderTokens(raw) {
+  if (!raw) return;
+  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n.toString();
+  const inp = document.getElementById('rawInput');
+  const out = document.getElementById('rawOutput');
+  const thk = document.getElementById('rawThinking');
+  const agt = document.getElementById('rawAgentTurns');
+  if (inp) inp.textContent = fmt(raw.input);
+  if (out) out.textContent = fmt(raw.output);
+  if (thk) thk.textContent = fmt(raw.thinking);
+  if (agt) agt.textContent = raw.agent_turns;
+}
+
+function renderHistory(hist) {
+  const el = document.getElementById('historyBars');
+  if (!hist.length) { el.innerHTML = '<div class="empty">No history</div>'; return; }
+  const mx = Math.max(...hist.map(h=>h.ml),.1);
+  el.innerHTML = hist.map(h => {
+    const hPct = Math.max((h.ml/mx)*100,2);
+    return '<div class="history-col">'+
+      '<div class="history-ml">'+h.ml.toFixed(1)+'</div>'+
+      '<div class="history-bar" style="height:'+hPct+'%"></div>'+
+      '<div class="history-label">'+esc(h.date?h.date.substring(5):'?')+'</div></div>';
+  }).join('');
+}
+
+function esc(s) { const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+
+// =========================================================================
+// GLOBAL AI WATER — User Distribution Model (Bottom-Up)
+// =========================================================================
+// ┌─────────────┬────────┬───────┬────────┬──────────┬────────────┐
+// │ Segment     │ Users  │ Q/day │ Model  │ mL/query │ L/day      │
+// ├─────────────┼────────┼───────┼────────┼──────────┼────────────┤
+// │ Casual      │ 480M   │ 3     │ small  │ 0.04     │ 57,600     │
+// │ Regular     │ 200M   │ 15    │ medium │ 0.40     │ 1,200,000  │
+// │ Power       │ 80M    │ 50    │ mixed  │ 1.24     │ 4,960,000  │
+// │ Agentic     │ 32M    │ 200   │ large  │ 2.30     │ 14,720,000 │
+// │ Enterprise  │ 8M eq. │ 100   │ medium │ 0.58     │ 464,000    │
+// │ Training    │ —      │ —     │ —      │ —        │ 384,000    │
+// ├─────────────┼────────┼───────┼────────┼──────────┼────────────┤
+// │ Subtotal    │        │       │        │          │ ~22M       │
+// │ × non-chat  │        │       │ ×8     │          │ ~175M      │
+// │ × overhead  │        │       │ ×2.5   │          │ ~440M      │
+// └─────────────┴────────┴───────┴────────┴──────────┴────────────┘
+// Top-down validation: IEA Electricity 2024 → 100–150 TWh AI energy/yr
+//   At WUE=1.08 + grid=0.9 → 540–810M L/day  ✓ (our ~440–700M consistent)
+// Central estimate: ~600M L/day ≈ 7,000 L/sec
+// Sources: IEA Electricity 2024, Google Environmental Report 2024,
+//          Macknick et al. (2012), Ember Global Electricity Review 2024
+
+function calcGlobalRate(pos) {
+  // Interpolate AI energy (TWh/yr): low=80, central=100, high=150
+  const energy_twh = lerp3(80, 100, 150, pos);
+  const wue = lerp3(PARAMS.wue.low, PARAMS.wue.cen, PARAMS.wue.high, pos);
+  const gr_c = lerp3(PARAMS.gr_c.low, PARAMS.gr_c.cen, PARAMS.gr_c.high, pos);
+  const renew = lerp3(PARAMS.renew.low, PARAMS.renew.cen, PARAMS.renew.high, pos);
+  // Convert TWh/yr → kWh/sec
+  const kwh_per_sec = energy_twh * 1e9 / (365.25 * 86400);
+  // L/sec = direct cooling + grid water (consumption basis)
+  return kwh_per_sec * wue + kwh_per_sec * gr_c * (1 - renew);
+}
+
+// Current global rate (updated by slider)
+let currentGlobalRate = calcGlobalRate(1.0); // high (default)
+
+function fmtGlobe(l) {
+  if (l >= 1e9) return (l/1e9).toFixed(2) + 'B';
+  if (l >= 1e6) return (l/1e6).toFixed(1) + 'M';
+  if (l >= 1e3) return Math.round(l/1e3) + 'K';
+  return Math.round(l) + '';
+}
+
+// =========================================================================
+// DISTRIBUTION SLIDER — scales global AI usage estimate
+// =========================================================================
+// Vertical slider: 0=way less (0.1×), 50=current estimate (1.0×), 100=way more (5.0×)
+let distMultiplier = 1.0;
+
+function onDistChange(value) {
+  // Exponential scale: 0→0.1×, 50→1.0×, 100→10.0×
+  // Using log scale for better feel
+  if (value <= 50) {
+    distMultiplier = 0.1 * Math.pow(10, value / 50);  // 0.1 → 1.0
+  } else {
+    distMultiplier = Math.pow(10, (value - 50) / 50);  // 1.0 → 10.0
+  }
+
+  // Update display
+  const lbl = document.getElementById('distLabel');
+  if (lbl) lbl.textContent = distMultiplier < 10 ? distMultiplier.toFixed(1) : Math.round(distMultiplier);
+
+  // Update globe rate display
+  const rate = currentGlobalRate * distMultiplier;
+  const rateEl = document.getElementById('globeRate');
+  if (rateEl) rateEl.textContent = '~' + Math.round(rate).toLocaleString();
+}
+
+// =========================================================================
+// INTERACTIVE SCENARIO SLIDER
+// =========================================================================
+let tank; // global reference for slider updates
+let globe; // global reference for globe
+
+function onScenarioChange(value) {
+  const pos = value / 100;
+  const raw = DATA && DATA.raw_tokens;
+  if (!raw) return;
+
+  // Recalculate water at this scenario position
+  const w = calcWater(raw.input, raw.output, raw.thinking, 'opus', pos);
+  if (raw.agent_turns > 0) {
+    const aw = calcWater(5000 * raw.agent_turns, 1500 * raw.agent_turns, 0, 'opus', pos);
+    w.consumption_ml += aw.consumption_ml;
+    w.withdrawal_ml += aw.withdrawal_ml;
+    w.energy_wh += aw.energy_wh;
+  }
+
+  // Update all displays
+  document.getElementById('consumed').textContent = w.consumption_ml.toFixed(2);
+  document.getElementById('withdrawn').textContent = w.withdrawal_ml.toFixed(2);
+  document.getElementById('energy').textContent = w.energy_wh.toFixed(2);
+  document.getElementById('nearestText').textContent = nearest(w.consumption_ml);
+  document.getElementById('eventsText').textContent =
+    DATA.today.events + ' events across ' + DATA.today.sessions + ' sessions';
+
+  // Store both values and update benchmarks for active mode
+  currentConsumedMl = w.consumption_ml;
+  currentWithdrawnMl = w.withdrawal_ml;
+  const benchMl = benchMode === 'consumed' ? w.consumption_ml : w.withdrawal_ml;
+  renderBenchmarks(computeBenchmarks(benchMl), benchMl);
+
+  // Update tank
+  if (tank) tank.setLevel(w.consumption_ml, TANK_MAX);
+
+  // Update globe counter rate (factoring in distribution multiplier)
+  currentGlobalRate = calcGlobalRate(pos);
+  const rateEl = document.getElementById('globeRate');
+  if (rateEl) rateEl.textContent = '~' + Math.round(currentGlobalRate * distMultiplier).toLocaleString();
+
+  // Update you label
+  const youEl = document.getElementById('globeYou');
+  if (youEl) youEl.textContent = w.consumption_ml.toFixed(3);
+
+  // Scenario label
+  const label = pos < 0.2 ? 'LOW' : pos > 0.8 ? 'HIGH' : pos < 0.4 ? 'LOW-CENTRAL' : pos > 0.6 ? 'CENTRAL-HIGH' : 'CENTRAL';
+  document.getElementById('scenarioLabel').textContent = label;
+  document.getElementById('scenarioMl').textContent = w.consumption_ml.toFixed(1);
+}
+
+// =========================================================================
+// INIT
+// =========================================================================
+window.addEventListener('load', () => {
+  // Tank
+  const tankCanvas = document.getElementById('tankCanvas');
+  tank = new WaterTank(tankCanvas);
+
+  // Globe
+  const globeCanvas = document.getElementById('globeCanvas');
+  globe = new GlobeViz(globeCanvas);
+
+  if (DATA && typeof DATA === 'object') {
+    render(DATA);
+    // Apply high scenario as default
+    onScenarioChange(100);
+    tank.setLevel(DATA.today.consumption_ml, TANK_MAX);
+
+    // Spawn initial drops
+    const nDrops = Math.min(DATA.today.events, 15);
+    for (let i = 0; i < nDrops; i++) {
+      setTimeout(() => tank.spawnDrop(), i * 300);
+    }
+
+    // Globe user label
+    const youEl = document.getElementById('globeYou');
+    if (youEl) youEl.textContent = DATA.today.consumption_ml.toFixed(3);
+  }
+
+  // Ambient drops
+  setInterval(() => { if (DATA && DATA.today.events > 0) tank.spawnDrop(); }, 2500);
+
+  // Uncertainty slider event
+  const slider = document.getElementById('uncSlider');
+  if (slider) {
+    slider.addEventListener('input', (e) => onScenarioChange(+e.target.value));
+  }
+
+  // Distribution slider event
+  const distSlider = document.getElementById('distSlider');
+  if (distSlider) {
+    distSlider.addEventListener('input', (e) => onDistChange(+e.target.value));
+  }
+
+  // Globe counter — ticks up in real-time
+  const counterEl = document.getElementById('globeCounter');
+  const now = new Date();
+  const sod = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let secElapsed = (now - sod) / 1000;
+
+  // Animation loop — drives tank, globe, and counter
+  let lastFrame = performance.now();
+  function frame(ts) {
+    const dt = (ts - lastFrame) / 1000;
+    lastFrame = ts;
+    const dtClamped = Math.min(dt, 0.05);
+
+    // Tank
+    tank.update(dtClamped);
+    tank.draw();
+
+    // Globe
+    secElapsed += dt;
+    const dayProg = Math.min(secElapsed / 86400, 1);
+    globe.setDrain(dayProg * Math.min(distMultiplier, 3));
+    globe.update(dtClamped);
+    globe.draw();
+
+    // Counter
+    if (counterEl) {
+      counterEl.textContent = fmtGlobe(secElapsed * currentGlobalRate * distMultiplier);
+    }
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+});
+</script>
+</body>
+</html>
