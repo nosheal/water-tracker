@@ -291,7 +291,7 @@ body{animation:flicker 8s infinite}
         <line x1="95" y1="39" x2="94" y2="45" stroke="#00ffff" stroke-width="0.4" opacity="0.3"/>
       </svg>
       <canvas id="tankCanvas" width="440" height="800"></canvas>
-      <div class="tank-label">1 TOILET FLUSH = 6 LITERS</div>
+      <div class="tank-label" id="tankScaleLabel">ONE FLUSH = 6L</div>
     </div>
     <div class="metrics">
       <div class="metric-group clickable active" id="metricConsumed" onclick="setBenchMode('consumed')" style="color:#00ffff">
@@ -468,7 +468,39 @@ function nearest(ml) {
 // =========================================================================
 // WATER TANK — beaker animation (6000 mL = one toilet flush)
 // =========================================================================
-const TANK_MAX = 6000;
+const TANK_SCALES = [
+  { max: 0.5,    label: 'A RAINDROP',     tick: 0.1,   minor: 0.05  },
+  { max: 1,      label: 'A FEW DROPS',    tick: 0.2,   minor: 0.1   },
+  { max: 5,      label: 'TEASPOON',       tick: 1,     minor: 0.5   },
+  { max: 15,     label: 'TABLESPOON',     tick: 5,     minor: 2.5   },
+  { max: 30,     label: 'MEDICINE CUP',   tick: 5,     minor: 2.5   },
+  { max: 60,     label: 'SHOT GLASS',     tick: 15,    minor: 5     },
+  { max: 120,    label: 'QUARTER CUP',    tick: 30,    minor: 15    },
+  { max: 240,    label: 'CUP OF WATER',   tick: 60,    minor: 30    },
+  { max: 355,    label: 'CAN OF SODA',    tick: 50,    minor: 25    },
+  { max: 500,    label: 'WATER BOTTLE',   tick: 100,   minor: 50    },
+  { max: 750,    label: 'WINE BOTTLE',    tick: 150,   minor: 75    },
+  { max: 1000,   label: 'LITER BOTTLE',   tick: 200,   minor: 100   },
+  { max: 2000,   label: '2-LITER BOTTLE', tick: 500,   minor: 250   },
+  { max: 3785,   label: 'GALLON JUG',     tick: 500,   minor: 250   },
+  { max: 6000,   label: 'ONE FLUSH',      tick: 1000,  minor: 500   },
+  { max: 10000,  label: 'MOP BUCKET',     tick: 2000,  minor: 1000  },
+  { max: 20000,  label: '5-GAL BUCKET',   tick: 5000,  minor: 2500  },
+  { max: 40000,  label: 'RAIN BARREL',    tick: 10000, minor: 5000  },
+  { max: 80000,  label: 'BATHTUB',        tick: 20000, minor: 10000 },
+  { max: 150000, label: 'HOT TUB',        tick: 50000, minor: 25000 },
+  { max: 500000, label: 'ABOVE-GND POOL', tick: 100000,minor: 50000 },
+];
+function fmtTick(ml, maxMl) {
+  if (maxMl >= 1000) { const l = ml/1000; return l === Math.floor(l) ? l+'L' : l.toFixed(1)+'L'; }
+  if (maxMl >= 10) return Math.round(ml)+'';
+  return ml.toFixed(1);
+}
+function fmtScaleLabel(scale) {
+  const amt = scale.max >= 1000 ? (scale.max/1000)+'L' : scale.max+' mL';
+  return scale.label + ' = ' + amt;
+}
+
 class WaterTank {
   constructor(canvas) {
     this.canvas = canvas;
@@ -478,8 +510,23 @@ class WaterTank {
     this.targetLevel = 0; this.level = 0;
     this.drops = []; this.splashes = []; this.bubbles = [];
     this.t = 0;
+    this.scale = TANK_SCALES[8]; // default: ONE FLUSH
+    this.tankMax = 6000;
   }
-  setLevel(ml, max) { this.targetLevel = Math.min((ml||0)/(max||TANK_MAX), 1); }
+  setLevel(ml) {
+    const v = ml || 0;
+    // Pick smallest scale that fits (with 10% headroom)
+    let newScale = TANK_SCALES[TANK_SCALES.length - 1];
+    for (const s of TANK_SCALES) {
+      if (v <= s.max * 0.9) { newScale = s; break; }
+    }
+    this.scale = newScale;
+    this.tankMax = newScale.max;
+    this.targetLevel = Math.min(v / this.tankMax, 1);
+    // Update label below canvas
+    const lbl = document.getElementById('tankScaleLabel');
+    if (lbl) lbl.textContent = fmtScaleLabel(newScale);
+  }
   spawnDrop() {
     const b = this.bk;
     this.drops.push({ x:b.l+30+Math.random()*(b.r-b.l-60), y:10+Math.random()*30, vy:0, r:2+Math.random()*3, a:1 });
@@ -528,19 +575,48 @@ class WaterTank {
     ctx.beginPath();ctx.moveTo(b.l,b.t);ctx.lineTo(b.l,b.b);ctx.lineTo(b.r,b.b);ctx.lineTo(b.r,b.t);ctx.stroke();
     ctx.beginPath();ctx.moveTo(b.l,b.t);ctx.lineTo(b.l-12,b.t-8);ctx.stroke();
     ctx.beginPath();ctx.moveTo(b.r,b.t);ctx.lineTo(b.r+12,b.t-8);ctx.stroke();
-    // Ticks — 6000 mL scale
+    // Ticks — dynamic scale
+    const sc = this.scale, tm = this.tankMax;
     ctx.strokeStyle='rgba(0,255,255,0.2)';ctx.lineWidth=1;ctx.fillStyle='rgba(0,255,255,0.35)';
     ctx.font='14px JetBrains Mono,monospace';ctx.textAlign='right';
-    for(let ml=1000;ml<=6000;ml+=1000){
-      const y=b.b-(ml/TANK_MAX)*(b.b-b.t);
+    for(let ml=sc.tick;ml<=tm;ml+=sc.tick){
+      const y=b.b-(ml/tm)*(b.b-b.t);
       ctx.beginPath();ctx.moveTo(b.l,y);ctx.lineTo(b.l+14,y);ctx.stroke();
-      ctx.fillText((ml>=1000?(ml/1000)+'L':ml+''),b.l-6,y+5);
+      ctx.fillText(fmtTick(ml,tm),b.l-6,y+5);
     }
     ctx.strokeStyle='rgba(0,255,255,0.06)';
-    for(let ml=500;ml<=6000;ml+=500){if(ml%1000===0)continue;const y=b.b-(ml/TANK_MAX)*(b.b-b.t);ctx.beginPath();ctx.moveTo(b.l,y);ctx.lineTo(b.l+7,y);ctx.stroke();}
-    // "FLUSH" label at top
+    for(let ml=sc.minor;ml<=tm;ml+=sc.minor){
+      if(Math.abs(ml/sc.tick - Math.round(ml/sc.tick)) < 0.01) continue;
+      const y=b.b-(ml/tm)*(b.b-b.t);
+      ctx.beginPath();ctx.moveTo(b.l,y);ctx.lineTo(b.l+7,y);ctx.stroke();
+    }
+    // Reference marks — real-world comparisons within current scale
+    ctx.save();
+    ctx.setLineDash([3, 5]);
+    ctx.lineWidth = 0.8;
+    ctx.font = '9px JetBrains Mono,monospace';
+    ctx.textAlign = 'right';
+    let lastRefY = b.b + 100; // track spacing to avoid overlap
+    for (const ref of TANK_SCALES) {
+      if (ref.max >= tm) break;
+      if (ref.max <= 0) continue;
+      const y = b.b - (ref.max / tm) * (b.b - b.t);
+      if (y < b.t + 18 || y > b.b - 10) continue;
+      if (lastRefY - y < 24) continue; // min 24px between lines
+      ctx.strokeStyle = 'rgba(255,215,0,0.10)';
+      ctx.beginPath();
+      ctx.moveTo(b.l + 2, y);
+      ctx.lineTo(b.r - 2, y);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,215,0,0.22)';
+      ctx.fillText(ref.label.toLowerCase(), b.r - 4, y - 3);
+      lastRefY = y;
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+    // Scale label at top
     ctx.fillStyle='rgba(0,255,255,0.15)';ctx.font='11px JetBrains Mono,monospace';ctx.textAlign='center';
-    ctx.fillText('ONE FLUSH',b.l+(b.r-b.l)/2,b.t-14);
+    ctx.fillText(sc.label,b.l+(b.r-b.l)/2,b.t-14);
     // Drops
     for(const d of this.drops){ctx.beginPath();ctx.arc(d.x,d.y,d.r+3,0,Math.PI*2);ctx.fillStyle=`rgba(0,255,255,${d.a*.12})`;ctx.fill();ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fillStyle=`rgba(0,255,255,${d.a*.8})`;ctx.fill();ctx.beginPath();ctx.arc(d.x-d.r*.3,d.y-d.r*.3,d.r*.35,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${d.a*.25})`;ctx.fill();}
     // Splashes
@@ -548,7 +624,7 @@ class WaterTank {
     // Scanlines
     ctx.fillStyle='rgba(0,0,0,0.02)';for(let y=0;y<H;y+=4) ctx.fillRect(0,y,W,1);
     // Level label
-    if(this.level>.005){const ml=(this.level*TANK_MAX).toFixed(0);ctx.font='bold 16px JetBrains Mono,monospace';ctx.fillStyle='rgba(0,255,255,0.6)';ctx.textAlign='left';ctx.fillText(ml+' mL',b.r+8,surfY+5);}
+    if(this.level>.005){const ml=this.level*this.tankMax;const mlStr=ml<10?ml.toFixed(2):ml<100?ml.toFixed(1):ml.toFixed(0);ctx.font='bold 16px JetBrains Mono,monospace';ctx.fillStyle='rgba(0,255,255,0.6)';ctx.textAlign='left';ctx.fillText(mlStr+' mL',b.r+8,surfY+5);}
   }
 }
 
@@ -844,7 +920,7 @@ function switchPeriod(period) {
   // Re-render all sections
   render(pd);
   // Update tank
-  if (tank) tank.setLevel(pd.totals.consumption_ml, TANK_MAX);
+  if (tank) tank.setLevel(pd.totals.consumption_ml);
   // Update globe user label
   const youEl = document.getElementById('globeYou');
   if (youEl) youEl.textContent = pd.totals.consumption_ml.toFixed(3);
@@ -1241,7 +1317,7 @@ function onScenarioChange(value) {
   updateBenchmarks();
 
   // Update tank
-  if (tank) tank.setLevel(w.consumption_ml, TANK_MAX);
+  if (tank) tank.setLevel(w.consumption_ml);
 
   // Update globe counter rate (factoring in distribution multiplier)
   currentGlobalRate = calcGlobalRate(pos);
@@ -1277,7 +1353,7 @@ window.addEventListener('load', () => {
     renderHistory(DATA.history);
     // Apply high scenario as default
     onScenarioChange(100);
-    tank.setLevel(todayData.totals.consumption_ml, TANK_MAX);
+    tank.setLevel(todayData.totals.consumption_ml);
 
     // Spawn initial drops
     const nDrops = Math.min(todayData.totals.events, 15);
