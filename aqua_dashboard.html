@@ -93,12 +93,23 @@ body{animation:flicker 8s infinite}
 .panel-title::before{content:'[ ';color:#333}
 .panel-title::after{content:' ]';color:#333}
 
-/* Sessions */
+/* Sessions — grouped & expandable */
+.session-group{border-bottom:1px solid #1a1a1a}
+.session-group:last-child{border-bottom:none}
 .session-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.session-row.group-header{cursor:pointer;padding:6px 0;user-select:none}
+.session-row.group-header:hover{background:rgba(255,255,255,0.02)}
+.session-row.group-header .session-dir{font-weight:700}
+.session-chevron{width:12px;font-size:9px;color:#555;flex-shrink:0;transition:transform 0.15s;text-align:center}
+.session-group.open .session-chevron{transform:rotate(90deg)}
+.session-children{display:none;padding-left:20px;border-left:1px solid #1a3a3a;margin-left:3px}
+.session-group.open .session-children{display:block}
+.session-children .session-row{padding:2px 0;font-size:11px;opacity:0.8}
 .session-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .session-dot.active{background:#00ff00;box-shadow:0 0 6px #00ff0088}
 .session-dot.ended{background:#666}
 .session-dir{color:#e0e0e0;width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-count{color:#ffd700;font-size:10px;min-width:20px}
 .session-events{color:#808080;width:60px;text-align:right}
 .session-ml{color:#00ffff;width:70px;text-align:right}
 .session-time{color:#666;margin-left:auto;font-size:10px}
@@ -969,16 +980,64 @@ function renderEnergyBenchmarks(wh) {
 
 function renderSessions(sessions) {
   const el = document.getElementById('sessionsList');
-  if (!sessions.length) { el.innerHTML = '<div class="empty">No sessions today</div>'; return; }
-  el.innerHTML = sessions.map(s =>
-    '<div class="session-row">' +
-      '<div class="session-dot '+(s.active?'active':'ended')+'"></div>' +
-      '<div class="session-dir">'+esc(s.dir)+'</div>' +
-      '<div class="session-events">'+s.events+' ev</div>' +
-      '<div class="session-ml">'+s.consumption_ml.toFixed(1)+' mL</div>' +
-      '<div class="session-time">'+esc(s.started)+'</div>' +
-    '</div>'
-  ).join('');
+  if (!sessions.length) { el.innerHTML = '<div class="empty">No sessions</div>'; return; }
+
+  // Group by directory name
+  const groups = new Map();
+  for (const s of sessions) {
+    const key = s.dir || '?';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  }
+
+  let html = '';
+  for (const [dir, items] of groups) {
+    const totalMl = items.reduce((a, s) => a + s.consumption_ml, 0);
+    const totalEv = items.reduce((a, s) => a + s.events, 0);
+    const hasActive = items.some(s => s.active);
+    const timeRange = items.length === 1
+      ? esc(items[0].started)
+      : esc(items[items.length - 1].started) + '–' + esc(items[0].started);
+
+    if (items.length === 1) {
+      // Single session — no grouping needed
+      const s = items[0];
+      html += '<div class="session-group">' +
+        '<div class="session-row">' +
+          '<div style="width:12px"></div>' +
+          '<div class="session-dot '+(s.active?'active':'ended')+'"></div>' +
+          '<div class="session-dir">'+esc(s.dir)+'</div>' +
+          '<div class="session-events">'+s.events+' ev</div>' +
+          '<div class="session-ml">'+s.consumption_ml.toFixed(1)+' mL</div>' +
+          '<div class="session-time">'+esc(s.started)+'</div>' +
+        '</div></div>';
+    } else {
+      // Grouped sessions — clickable header + expandable children
+      const gid = 'sg_' + dir.replace(/\W/g, '_');
+      html += '<div class="session-group" id="'+gid+'">' +
+        '<div class="session-row group-header" onclick="document.getElementById(\''+gid+'\').classList.toggle(\'open\')">' +
+          '<div class="session-chevron">▶</div>' +
+          '<div class="session-dot '+(hasActive?'active':'ended')+'"></div>' +
+          '<div class="session-dir">'+esc(dir)+'</div>' +
+          '<div class="session-count">×'+items.length+'</div>' +
+          '<div class="session-events">'+totalEv+' ev</div>' +
+          '<div class="session-ml">'+totalMl.toFixed(1)+' mL</div>' +
+          '<div class="session-time">'+timeRange+'</div>' +
+        '</div>' +
+        '<div class="session-children">' +
+          items.map(s =>
+            '<div class="session-row">' +
+              '<div class="session-dot '+(s.active?'active':'ended')+'"></div>' +
+              '<div class="session-dir" style="color:#808080">'+esc(s.model)+'</div>' +
+              '<div class="session-events">'+s.events+' ev</div>' +
+              '<div class="session-ml">'+s.consumption_ml.toFixed(1)+' mL</div>' +
+              '<div class="session-time">'+esc(s.started)+'</div>' +
+            '</div>'
+          ).join('') +
+        '</div></div>';
+    }
+  }
+  el.innerHTML = html;
 }
 
 function renderTools(tools) {
