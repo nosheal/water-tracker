@@ -85,19 +85,20 @@ def compute_benchmarks(ml):
 
 
 # ---------------------------------------------------------------------------
-# Database queries
+# Database queries — parameterized by time period
 # ---------------------------------------------------------------------------
 
-def get_dashboard_data():
-    if not DB_PATH.exists():
-        return _empty_data()
-
-    conn = sqlite3.connect(str(DB_PATH), timeout=5)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    week_ago = (datetime.now() - timedelta(days=7)).isoformat()
+def _query_period(conn, start_iso=None, end_iso=None):
+    """Query all dashboard data for a specific time range."""
+    if start_iso is None:
+        time_clause = ""
+        time_params = []
+    elif end_iso:
+        time_clause = "AND s.started_at >= ? AND s.started_at < ?"
+        time_params = [start_iso, end_iso]
+    else:
+        time_clause = "AND s.started_at >= ?"
+        time_params = [start_iso]
 
     # --- sessions ---
     sessions = conn.execute(
@@ -109,8 +110,8 @@ def get_dashboard_data():
         " COALESCE(SUM(e.agent_sub_turns),0) as ta,"
         " COUNT(CASE WHEN e.tool_name='Task' THEN 1 END) as task_count"
         " FROM sessions s LEFT JOIN events e ON s.session_id=e.session_id"
-        " WHERE s.started_at>? GROUP BY s.session_id ORDER BY s.started_at DESC",
-        (today,)).fetchall()
+        f" WHERE 1=1 {time_clause} GROUP BY s.session_id ORDER BY s.started_at DESC",
+        time_params).fetchall()
 
     session_list = []
     total_c = total_w = total_e = 0
@@ -134,16 +135,17 @@ def get_dashboard_data():
             "tasks": s["task_count"],
             "consumption_ml": round(w["consumption_ml"], 3),
             "model": mdl,
-            "started": (s["started_at"] or "")[11:16],
+            "started": (s["started_at"] or "")[5:16],
         })
 
-    # --- timeline ---
+    # --- timeline (capped at 1000 points) ---
     evts = conn.execute(
         "SELECT e.timestamp, e.tool_name, e.est_input_tokens as i,"
         " e.est_output_tokens as o, e.est_thinking_tokens as t,"
         " e.agent_sub_turns as a, s.model"
         " FROM events e JOIN sessions s ON e.session_id=s.session_id"
-        " WHERE s.started_at>? ORDER BY e.timestamp", (today,)).fetchall()
+        f" WHERE 1=1 {time_clause} ORDER BY e.timestamp",
+        time_params).fetchall()
 
     timeline = []
     cum = 0.0
@@ -154,9 +156,15 @@ def get_dashboard_data():
         if at > 0:
             w["consumption_ml"] += calc_water(5000*at, 1500*at, 0, mdl)["consumption_ml"]
         cum += w["consumption_ml"]
-        timeline.append({"t": (ev["timestamp"] or "")[11:19],
+        timeline.append({"t": (ev["timestamp"] or "")[5:19],
                          "tool": ev["tool_name"] or "prompt",
                          "ml": round(cum, 3)})
+    if len(timeline) > 1000:
+        step = max(len(timeline) // 1000, 1)
+        last = timeline[-1]
+        timeline = timeline[::step]
+        if timeline[-1]["t"] != last["t"]:
+            timeline.append(last)
 
     # --- tools ---
     tools_raw = conn.execute(
@@ -165,8 +173,9 @@ def get_dashboard_data():
         " COALESCE(SUM(e.est_output_tokens),0) as o,"
         " COALESCE(SUM(e.est_thinking_tokens),0) as t"
         " FROM events e JOIN sessions s ON e.session_id=s.session_id"
-        " WHERE s.started_at>? AND e.tool_name IS NOT NULL"
-        " GROUP BY e.tool_name ORDER BY cnt DESC", (today,)).fetchall()
+        f" WHERE 1=1 {time_clause} AND e.tool_name IS NOT NULL"
+        " GROUP BY e.tool_name ORDER BY cnt DESC",
+        time_params).fetchall()
     tool_list = []
     for t in tools_raw:
         w = calc_water(t["i"], t["o"], t["t"])
@@ -177,7 +186,8 @@ def get_dashboard_data():
         "SELECT COUNT(*) as cnt, COALESCE(SUM(e.est_input_tokens),0) as i,"
         " COALESCE(SUM(e.est_output_tokens),0) as o"
         " FROM events e JOIN sessions s ON e.session_id=s.session_id"
-        " WHERE s.started_at>? AND e.tool_name IS NULL", (today,)).fetchone()
+        f" WHERE 1=1 {time_clause} AND e.tool_name IS NULL",
+        time_params).fetchone()
     if prompt_row and prompt_row["cnt"] > 0:
         pw = calc_water(prompt_row["i"], prompt_row["o"])
         tool_list.append({"name": "prompt", "count": prompt_row["cnt"],
@@ -196,29 +206,8 @@ def get_dashboard_data():
             w["consumption_ml"] += calc_water(5000*ta, 1500*ta, 0, "opus", sc)["consumption_ml"]
         scenarios[sc] = round(w["consumption_ml"], 3)
 
-    # --- history (7 days) ---
-    hist = conn.execute(
-        "SELECT DATE(s.started_at) as day, COUNT(e.id) as cnt,"
-        " COALESCE(SUM(e.est_input_tokens),0) as i,"
-        " COALESCE(SUM(e.est_output_tokens),0) as o,"
-        " COALESCE(SUM(e.est_thinking_tokens),0) as t,"
-        " COALESCE(SUM(e.agent_sub_turns),0) as a"
-        " FROM sessions s LEFT JOIN events e ON s.session_id=e.session_id"
-        " WHERE s.started_at>? GROUP BY DATE(s.started_at) ORDER BY day",
-        (week_ago,)).fetchall()
-    history = []
-    for h in hist:
-        w = calc_water(h["i"], h["o"], h["t"])
-        at = h["a"] or 0
-        if at > 0:
-            w["consumption_ml"] += calc_water(5000*at, 1500*at, 0)["consumption_ml"]
-        history.append({"date": h["day"], "ml": round(w["consumption_ml"], 2),
-                        "events": h["cnt"]})
-
-    conn.close()
-
     return {
-        "today": {
+        "totals": {
             "consumption_ml": round(total_c, 3),
             "withdrawal_ml": round(total_w, 3),
             "energy_wh": round(total_e, 3),
@@ -232,20 +221,76 @@ def get_dashboard_data():
         "tools": tool_list,
         "scenarios": scenarios,
         "raw_tokens": {"input": ti, "output": to, "thinking": tt, "agent_turns": ta},
-        "history": history,
-        "generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
-def _empty_data():
+def _empty_period():
     return {
-        "today": {"consumption_ml": 0, "withdrawal_ml": 0, "energy_wh": 0,
-                   "sessions": 0, "events": 0, "nearest": "nothing yet"},
+        "totals": {"consumption_ml": 0, "withdrawal_ml": 0, "energy_wh": 0,
+                    "sessions": 0, "events": 0, "nearest": "nothing yet"},
         "benchmarks": compute_benchmarks(0),
         "sessions": [], "timeline": [], "tools": [],
         "scenarios": {"low": 0, "central": 0, "high": 0},
         "raw_tokens": {"input": 0, "output": 0, "thinking": 0, "agent_turns": 0},
-        "history": [], "generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def get_dashboard_data():
+    if not DB_PATH.exists():
+        empty = _empty_period()
+        return {
+            "periods": {p: empty for p in
+                        ["today", "yesterday", "week", "month", "year", "all"]},
+            "history": [],
+            "generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    conn = sqlite3.connect(str(DB_PATH), timeout=5)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    week_start = today_start - timedelta(days=7)
+    month_start = today_start - timedelta(days=30)
+    year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    periods = {
+        "today":     _query_period(conn, today_start.isoformat()),
+        "yesterday": _query_period(conn, yesterday_start.isoformat(),
+                                   today_start.isoformat()),
+        "week":      _query_period(conn, week_start.isoformat()),
+        "month":     _query_period(conn, month_start.isoformat()),
+        "year":      _query_period(conn, year_start.isoformat()),
+        "all":       _query_period(conn),
+    }
+
+    # --- history (7 days) ---
+    hist = conn.execute(
+        "SELECT DATE(s.started_at) as day, COUNT(e.id) as cnt,"
+        " COALESCE(SUM(e.est_input_tokens),0) as i,"
+        " COALESCE(SUM(e.est_output_tokens),0) as o,"
+        " COALESCE(SUM(e.est_thinking_tokens),0) as t,"
+        " COALESCE(SUM(e.agent_sub_turns),0) as a"
+        " FROM sessions s LEFT JOIN events e ON s.session_id=e.session_id"
+        " WHERE s.started_at>? GROUP BY DATE(s.started_at) ORDER BY day",
+        (week_start.isoformat(),)).fetchall()
+    history = []
+    for h in hist:
+        w = calc_water(h["i"], h["o"], h["t"])
+        at = h["a"] or 0
+        if at > 0:
+            w["consumption_ml"] += calc_water(5000*at, 1500*at, 0)["consumption_ml"]
+        history.append({"date": h["day"], "ml": round(w["consumption_ml"], 2),
+                        "events": h["cnt"]})
+
+    conn.close()
+
+    return {
+        "periods": periods,
+        "history": history,
+        "generated": now.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 

@@ -168,6 +168,14 @@ body{animation:flicker 8s infinite}
 .dim{color:#808080}
 .empty{color:#333;font-size:12px;text-align:center;padding:20px 0}
 
+/* PERIOD TABS */
+.period-tabs{display:flex;gap:2px;margin-bottom:16px;flex-wrap:wrap}
+.period-tab{background:#0e0e0e;border:1px solid #1a3a3a;color:#666;font-family:inherit;font-size:10px;
+  letter-spacing:2px;text-transform:uppercase;padding:6px 14px;cursor:pointer;transition:all 0.15s}
+.period-tab:hover{border-color:#00ffff44;color:#aaa}
+.period-tab.active{background:#141414;border-color:#00ffff;color:#00ffff;
+  text-shadow:0 0 8px rgba(0,255,255,0.4);box-shadow:0 0 8px #00ffff22}
+
 /* MASCOT & ICONS */
 .mascot{display:inline-block;vertical-align:middle;margin-left:8px;animation:mascot-bob 3s ease-in-out infinite}
 @keyframes mascot-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
@@ -238,6 +246,16 @@ body{animation:flicker 8s infinite}
       </div>
     </div>
   </header>
+
+  <!-- PERIOD TABS -->
+  <nav class="period-tabs">
+    <button class="period-tab active" data-period="today">TODAY</button>
+    <button class="period-tab" data-period="yesterday">YESTERDAY</button>
+    <button class="period-tab" data-period="week">THIS WEEK</button>
+    <button class="period-tab" data-period="month">THIS MONTH</button>
+    <button class="period-tab" data-period="year">THIS YEAR</button>
+    <button class="period-tab" data-period="all">ALL TIME</button>
+  </nav>
 
   <!-- HERO: beaker | metrics | globe -->
   <section class="hero">
@@ -775,18 +793,43 @@ function setBenchMode(mode) {
   renderBenchmarks(computeBenchmarks(ml), ml);
 }
 
+// =========================================================================
+// PERIOD SWITCHING
+// =========================================================================
+let activePeriod = 'today';
+
+function switchPeriod(period) {
+  activePeriod = period;
+  // Update tab styling
+  document.querySelectorAll('.period-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.period === period);
+  });
+  // Get period data
+  const pd = DATA && DATA.periods && DATA.periods[period];
+  if (!pd) return;
+  // Re-render all sections
+  render(pd);
+  // Update tank
+  if (tank) tank.setLevel(pd.totals.consumption_ml, TANK_MAX);
+  // Update globe user label
+  const youEl = document.getElementById('globeYou');
+  if (youEl) youEl.textContent = pd.totals.consumption_ml.toFixed(3);
+  // Re-apply current slider position (recalculates with new period's tokens)
+  const slider = document.getElementById('uncSlider');
+  if (slider) onScenarioChange(+slider.value);
+}
+
 const TOOL_COLORS={Read:'#00cccc',Glob:'#009999',Grep:'#00aaaa',Edit:'#ff00ff',Write:'#cc00cc',Bash:'#00ff00',Task:'#ffd700',WebFetch:'#ff6b00',WebSearch:'#ff8c00',AskUserQuestion:'#8888ff',Skill:'#aa66ff',prompt:'#e0e0e0'};
 
 function render(d) {
-  document.getElementById('consumed').textContent = d.today.consumption_ml.toFixed(2);
-  document.getElementById('withdrawn').textContent = d.today.withdrawal_ml.toFixed(2);
-  document.getElementById('energy').textContent = d.today.energy_wh.toFixed(2);
-  document.getElementById('nearestText').textContent = d.today.nearest;
-  document.getElementById('eventsText').textContent = d.today.events + ' events across ' + d.today.sessions + ' sessions';
-  document.getElementById('genTime').textContent = 'GENERATED ' + d.generated;
+  document.getElementById('consumed').textContent = d.totals.consumption_ml.toFixed(2);
+  document.getElementById('withdrawn').textContent = d.totals.withdrawal_ml.toFixed(2);
+  document.getElementById('energy').textContent = d.totals.energy_wh.toFixed(2);
+  document.getElementById('nearestText').textContent = d.totals.nearest;
+  document.getElementById('eventsText').textContent = d.totals.events + ' events across ' + d.totals.sessions + ' sessions';
 
-  currentConsumedMl = d.today.consumption_ml;
-  currentWithdrawnMl = d.today.withdrawal_ml;
+  currentConsumedMl = d.totals.consumption_ml;
+  currentWithdrawnMl = d.totals.withdrawal_ml;
   const benchMl = benchMode === 'consumed' ? currentConsumedMl : currentWithdrawnMl;
   renderBenchmarks(computeBenchmarks(benchMl), benchMl);
   renderSessions(d.sessions);
@@ -794,7 +837,6 @@ function render(d) {
   renderTools(d.tools);
   renderUncertainty(d.scenarios);
   renderTokens(d.raw_tokens);
-  renderHistory(d.history);
 }
 
 const IC = {
@@ -988,7 +1030,9 @@ let globe; // global reference for globe
 
 function onScenarioChange(value) {
   const pos = value / 100;
-  const raw = DATA && DATA.raw_tokens;
+  const pd = DATA && DATA.periods && DATA.periods[activePeriod];
+  if (!pd) return;
+  const raw = pd.raw_tokens;
   if (!raw) return;
 
   // Recalculate water at this scenario position
@@ -1006,7 +1050,7 @@ function onScenarioChange(value) {
   document.getElementById('energy').textContent = w.energy_wh.toFixed(2);
   document.getElementById('nearestText').textContent = nearest(w.consumption_ml);
   document.getElementById('eventsText').textContent =
-    DATA.today.events + ' events across ' + DATA.today.sessions + ' sessions';
+    pd.totals.events + ' events across ' + pd.totals.sessions + ' sessions';
 
   // Store both values and update benchmarks for active mode
   currentConsumedMl = w.consumption_ml;
@@ -1044,25 +1088,34 @@ window.addEventListener('load', () => {
   const globeCanvas = document.getElementById('globeCanvas');
   globe = new GlobeViz(globeCanvas);
 
-  if (DATA && typeof DATA === 'object') {
-    render(DATA);
+  if (DATA && typeof DATA === 'object' && DATA.periods) {
+    document.getElementById('genTime').textContent = 'GENERATED ' + DATA.generated;
+    const todayData = DATA.periods.today;
+    render(todayData);
+    renderHistory(DATA.history);
     // Apply high scenario as default
     onScenarioChange(100);
-    tank.setLevel(DATA.today.consumption_ml, TANK_MAX);
+    tank.setLevel(todayData.totals.consumption_ml, TANK_MAX);
 
     // Spawn initial drops
-    const nDrops = Math.min(DATA.today.events, 15);
+    const nDrops = Math.min(todayData.totals.events, 15);
     for (let i = 0; i < nDrops; i++) {
       setTimeout(() => tank.spawnDrop(), i * 300);
     }
 
     // Globe user label
     const youEl = document.getElementById('globeYou');
-    if (youEl) youEl.textContent = DATA.today.consumption_ml.toFixed(3);
+    if (youEl) youEl.textContent = todayData.totals.consumption_ml.toFixed(3);
+
+    // Wire up period tabs
+    document.querySelectorAll('.period-tab').forEach(btn => {
+      btn.addEventListener('click', () => switchPeriod(btn.dataset.period));
+    });
   }
 
   // Ambient drops
-  setInterval(() => { if (DATA && DATA.today.events > 0) tank.spawnDrop(); }, 2500);
+  const hasEvents = DATA && DATA.periods && DATA.periods.today.totals.events > 0;
+  setInterval(() => { if (hasEvents) tank.spawnDrop(); }, 2500);
 
   // Uncertainty slider event
   const slider = document.getElementById('uncSlider');
